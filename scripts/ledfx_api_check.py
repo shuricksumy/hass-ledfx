@@ -70,10 +70,10 @@ class NonClosingAsyncClient(httpx.AsyncClient):
     AsyncClient would close itself after the first call.
     """
 
-    async def __aenter__(self):  # noqa: D105
+    async def __aenter__(self):
         return self
 
-    async def __aexit__(self, *args: Any) -> None:  # noqa: D105
+    async def __aexit__(self, *args: Any) -> None:
         return None
 
 
@@ -105,7 +105,7 @@ async def check_read_only(client: Any, rep: Report) -> dict:
         info = await client.info()
         collected["info"] = info
         rep.ok("GET  /api/info", f"LedFx {info.get('version', '?')}")
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         rep.fail("GET  /api/info", repr(err))
 
     try:
@@ -127,14 +127,14 @@ async def check_read_only(client: Any, rep: Report) -> dict:
         for key in ("ledfx_presets", "user_presets", "audio"):
             if key in config:
                 rep.info(f"config.{key}: {len(config[key])} entries")
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         rep.fail("GET  /api/config", repr(err))
 
     try:
         devices = await client.devices()
         collected["devices"] = devices
         rep.ok("GET  /api/devices", f"{len(devices.get('devices', {}))} device(s)")
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         rep.fail("GET  /api/devices", repr(err))
 
     try:
@@ -150,14 +150,14 @@ async def check_read_only(client: Any, rep: Report) -> dict:
         else:
             if vids:
                 rep.ok("  virtual shape", "config/effect/is_device present")
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         rep.fail("GET  /api/virtuals", repr(err))
 
     try:
         scenes = await client.scenes()
         collected["scenes"] = scenes
         rep.ok("GET  /api/scenes", f"{len(scenes.get('scenes', {}))} scene(s)")
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         rep.fail("GET  /api/scenes", repr(err))
 
     try:
@@ -179,7 +179,7 @@ async def check_read_only(client: Any, rep: Report) -> dict:
             )
         else:
             rep.ok("  schema.audio.audio_device.enum", f"{len(audio_enum)} input(s)")
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         rep.fail("GET  /api/schema", repr(err))
 
     try:
@@ -189,7 +189,7 @@ async def check_read_only(client: Any, rep: Report) -> dict:
             "GET  /api/colors",
             f"{len(colors.get('colors', {}).get('builtin', {}))} builtin colors",
         )
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         rep.fail("GET  /api/colors", repr(err))
 
     try:
@@ -199,7 +199,7 @@ async def check_read_only(client: Any, rep: Report) -> dict:
             "GET  /api/audio/devices",
             f"{len(audio.get('devices', {}))} input(s), active={audio.get('active_device_index')}",
         )
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         rep.fail("GET  /api/audio/devices", repr(err))
 
     return collected
@@ -232,7 +232,7 @@ async def check_write(client: Any, rep: Report, virtual_id: str, data: dict) -> 
             f"POST /api/virtuals/{virtual_id}/effects",
             f"type={resp.get('effect', {}).get('type')} (turn on)",
         )
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         rep.fail(f"POST /api/virtuals/{virtual_id}/effects", repr(err))
         return
 
@@ -246,7 +246,7 @@ async def check_write(client: Any, rep: Report, virtual_id: str, data: dict) -> 
                 f"PUT  /api/virtuals/{virtual_id}/effects",
                 f"brightness came back as {got!r}",
             )
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         rep.fail(f"PUT  /api/virtuals/{virtual_id}/effects", repr(err))
 
     presets = data.get("config", {}).get("ledfx_presets", {}).get(effect, {})
@@ -258,7 +258,7 @@ async def check_write(client: Any, rep: Report, virtual_id: str, data: dict) -> 
                 f"PUT  /api/virtuals/{virtual_id}/presets",
                 f"category=ledfx_presets preset={preset_id}",
             )
-        except Exception as err:  # noqa: BLE001
+        except Exception as err:
             rep.fail(f"PUT  /api/virtuals/{virtual_id}/presets", repr(err))
     else:
         rep.info(f"no ledfx_presets for '{effect}' — preset path not exercised")
@@ -266,15 +266,17 @@ async def check_write(client: Any, rep: Report, virtual_id: str, data: dict) -> 
     try:
         await client.device_off(virtual_id)
         rep.ok(f"DELETE /api/virtuals/{virtual_id}/effects", "turn off")
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         rep.fail(f"DELETE /api/virtuals/{virtual_id}/effects", repr(err))
 
     if original.get("type"):
         try:
             await client.device_on(virtual_id, original["type"])
-            await client.effect(virtual_id, original["type"], original.get("config", {}))
+            await client.effect(
+                virtual_id, original["type"], original.get("config", {})
+            )
             rep.info(f"restored previous effect '{original['type']}'")
-        except Exception as err:  # noqa: BLE001
+        except Exception as err:
             rep.info(f"could not restore previous effect: {err!r}")
 
 
@@ -305,9 +307,7 @@ async def main() -> int:
     )
 
     http = NonClosingAsyncClient(verify=False, follow_redirects=True)
-    ledfx = client_mod.LedFxClient(
-        http, f"{args.host}", args.port, auth, args.timeout
-    )
+    ledfx = client_mod.LedFxClient(http, f"{args.host}", args.port, auth, args.timeout)
     # client.py builds "http://{ip}:{port}/api"; swap the scheme for https setups.
     if args.scheme == "https":
         ledfx._url = ledfx._url.replace("http://", "https://", 1)

@@ -1,6 +1,5 @@
 """Light component."""
 
-
 from __future__ import annotations
 
 import logging
@@ -345,10 +344,8 @@ class LedFxLight(LedFxEntity, LightEntity):
 
             if ATTR_RGBW_COLOR in kwargs:
                 self._attr_rgbw_color = kwargs[ATTR_RGBW_COLOR]
-                self._updater.data[
-                    f"{self._attr_device_code}_{ATTR_LIGHT_COLOR}"
-                ] = rgbw_to_hex(
-                    self._attr_rgbw_color
+                self._updater.data[f"{self._attr_device_code}_{ATTR_LIGHT_COLOR}"] = (
+                    rgbw_to_hex(self._attr_rgbw_color)
                 )  # type: ignore
 
             self._attr_extra_state_attributes = {

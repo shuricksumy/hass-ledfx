@@ -17,7 +17,7 @@ configuration.
 
 * LedFx **2.x** — developed and verified against
   [v2.1.9](https://github.com/LedFx/LedFx/releases/tag/v2.1.9)
-* Home Assistant 2023.6 or newer (verified on 2026.8)
+* Home Assistant 2023.8 or newer (developed and verified on 2026.8)
 
 LedFx 2.x moved effects and presets onto virtuals and dropped them from
 devices, so this release targets the `virtuals` API only. LedFx 0.10.x is no
@@ -258,6 +258,17 @@ python3 scripts/mock_ledfx.py 8899 &
 python3 scripts/ledfx_api_check.py --host 127.0.0.1 --port 8899 --write my-strip
 ```
 
+## Development
+
+Linting and formatting use [ruff](https://docs.astral.sh/ruff/); CI also runs
+Home Assistant's `hassfest` and the HACS validator.
+
+```bash
+pip install -r requirements_test.txt
+ruff check .
+ruff format --check .
+```
+
 ## Tests
 
 Request-shape tests need only `httpx`:
@@ -270,14 +281,14 @@ The rest need the Home Assistant test harness (`requirements_test.txt`) and run
 against the bundled mock:
 
 ```bash
-python3 -m pytest tests/ -q -o asyncio_mode=auto
+pytest tests/ -q
 ```
 
 `tests/test_live_ha.py` additionally boots Home Assistant against a real LedFx,
 and is skipped unless `LEDFX_HOST` is set:
 
 ```bash
-LEDFX_HOST=192.168.1.50 python3 -m pytest tests/test_live_ha.py -q -o asyncio_mode=auto
+LEDFX_HOST=192.168.1.50 pytest tests/test_live_ha.py -q
 ```
 
 ## Credits

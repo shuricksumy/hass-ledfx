@@ -100,8 +100,8 @@ class LedFxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore
                 self.hass,
                 user_input.get(CONF_IP_ADDRESS),  # type: ignore
                 user_input.get(CONF_PORT),  # type: ignore
-                user_input.get(CONF_USERNAME, None),
-                user_input.get(CONF_PASSWORD, None),
+                user_input.get(CONF_USERNAME),
+                user_input.get(CONF_PASSWORD),
                 user_input.get(CONF_TIMEOUT, DEFAULT_TIMEOUT),
             )
 
@@ -197,8 +197,8 @@ class LedFxOptionsFlow(config_entries.OptionsFlow):
                 self.hass,
                 user_input.get(CONF_IP_ADDRESS),  # type: ignore
                 user_input.get(CONF_PORT),  # type: ignore
-                user_input.get(CONF_USERNAME, None),
-                user_input.get(CONF_PASSWORD, None),
+                user_input.get(CONF_USERNAME),
+                user_input.get(CONF_PASSWORD),
                 user_input.get(CONF_TIMEOUT, DEFAULT_TIMEOUT),
             )
 

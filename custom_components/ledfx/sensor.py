@@ -93,8 +93,7 @@ class LedFxSensor(LedFxEntity, SensorEntity):
         state: Any = self._updater.data.get(self.entity_description.key, None)
 
         if (
-            self._attr_native_value == state
-            and self._attr_available == is_available  # type: ignore
+            self._attr_native_value == state and self._attr_available == is_available  # type: ignore
         ):
             return
 

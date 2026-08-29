@@ -1,11 +1,16 @@
-"""Enums."""
+"""Enums.
+
+StrEnum rather than (str, Enum): with the latter, Python 3.11 changed
+f"{Member}" to render "Class.MEMBER" instead of the value, which silently
+broke every handler name built by interpolating one of these.
+"""
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 
-class Method(str, Enum):
+class Method(StrEnum):
     """Method enum"""
 
     GET = "GET"
@@ -14,7 +19,7 @@ class Method(str, Enum):
     DELETE = "DELETE"
 
 
-class ActionType(str, Enum):
+class ActionType(StrEnum):
     """ActionType enum"""
 
     DEFAULT = "default"
@@ -22,7 +27,7 @@ class ActionType(str, Enum):
     DEVICE = "device"
 
 
-class EffectCategory(str, Enum):
+class EffectCategory(StrEnum):
     """EffectCategory enum"""
 
     NONE = "none"

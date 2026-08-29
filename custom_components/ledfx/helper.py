@@ -197,7 +197,9 @@ def hex_to_rgbw(
 
     color = color.lstrip("#")
 
-    if len(color) < 6 or any(char not in "0123456789abcdefABCDEF" for char in color[:6]):
+    if len(color) < 6 or any(
+        char not in "0123456789abcdefABCDEF" for char in color[:6]
+    ):
         return None
 
     if color == "ffffff":
@@ -222,4 +224,4 @@ def rgbw_to_hex(color: tuple[int, int, int, int] | None) -> str | None:
     if color[0] == 0 and color[1] == 0 and color[2] == 0:
         return "#ffffff" if color[3] > 0 else "#000000"
 
-    return "#%02x%02x%02x" % color[:3]  # pylint: disable=consider-using-f-string
+    return "#{:02x}{:02x}{:02x}".format(*color[:3])

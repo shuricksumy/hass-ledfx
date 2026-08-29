@@ -41,7 +41,7 @@ def expected_lingering_timers():
 
 
 @pytest.fixture
-def ledfx_server(socket_enabled):  # noqa: ANN001
+def ledfx_server(socket_enabled):
     """Serve the LedFx 2.x mock on a free localhost port."""
 
     spec = importlib.util.spec_from_file_location("_mock_ledfx_flow", MOCK_PATH)
@@ -59,7 +59,7 @@ def ledfx_server(socket_enabled):  # noqa: ANN001
 
 async def test_user_flow_creates_entry(
     hass: HomeAssistant,
-    enable_custom_integrations,  # noqa: ANN001
+    enable_custom_integrations,
     ledfx_server: int,
 ) -> None:
     """IP + port must be enough to create an entry."""
@@ -90,7 +90,7 @@ async def test_user_flow_creates_entry(
 
 async def test_user_flow_with_basic_auth(
     hass: HomeAssistant,
-    enable_custom_integrations,  # noqa: ANN001
+    enable_custom_integrations,
     ledfx_server: int,
 ) -> None:
     """Ticking basic auth re-shows the form for credentials, then keeps them."""
@@ -133,8 +133,8 @@ async def test_user_flow_with_basic_auth(
 
 async def test_user_flow_reports_unreachable_host(
     hass: HomeAssistant,
-    enable_custom_integrations,  # noqa: ANN001
-    socket_enabled,  # noqa: ANN001
+    enable_custom_integrations,
+    socket_enabled,
 ) -> None:
     """An unreachable LedFx must return an error, not create an entry."""
 

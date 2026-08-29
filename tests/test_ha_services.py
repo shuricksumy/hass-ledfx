@@ -20,7 +20,8 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
-from homeassistant.components.light import ATTR_BRIGHTNESS, DOMAIN as LIGHT_DOMAIN
+from homeassistant.components.light import ATTR_BRIGHTNESS
+from homeassistant.components.light import DOMAIN as LIGHT_DOMAIN
 from homeassistant.const import (
     ATTR_ENTITY_ID,
     CONF_IP_ADDRESS,
@@ -55,7 +56,7 @@ def _load_mock():
 
 
 @pytest.fixture
-def ledfx_server(socket_enabled):  # noqa: ANN001
+def ledfx_server(socket_enabled):
     """Serve the LedFx 2.x mock on a free localhost port."""
 
     module = _load_mock()
@@ -72,7 +73,7 @@ def ledfx_server(socket_enabled):  # noqa: ANN001
 @pytest.fixture
 async def setup_entry(
     hass: HomeAssistant,
-    enable_custom_integrations,  # noqa: ANN001
+    enable_custom_integrations,
     ledfx_server: int,
 ):
     """Set the integration up against the mock."""
@@ -100,7 +101,7 @@ async def _light_entity_id(hass: HomeAssistant) -> str:
     return lights[0]
 
 
-async def test_light_turn_on_and_off(hass: HomeAssistant, setup_entry) -> None:  # noqa: ANN001
+async def test_light_turn_on_and_off(hass: HomeAssistant, setup_entry) -> None:
     """turn_on / turn_off must dispatch to _device_on / _device_off."""
 
     entity_id = await _light_entity_id(hass)
@@ -118,9 +119,7 @@ async def test_light_turn_on_and_off(hass: HomeAssistant, setup_entry) -> None: 
     assert hass.states.get(entity_id).state == STATE_OFF
 
 
-async def test_light_turn_on_with_brightness(
-    hass: HomeAssistant, setup_entry  # noqa: ANN001
-) -> None:
+async def test_light_turn_on_with_brightness(hass: HomeAssistant, setup_entry) -> None:
     """Brightness goes through the effect update path."""
 
     entity_id = await _light_entity_id(hass)
@@ -138,9 +137,7 @@ async def test_light_turn_on_with_brightness(
     assert state.attributes.get(ATTR_BRIGHTNESS) == 128
 
 
-async def test_light_turn_on_with_effect(
-    hass: HomeAssistant, setup_entry  # noqa: ANN001
-) -> None:
+async def test_light_turn_on_with_effect(hass: HomeAssistant, setup_entry) -> None:
     """Selecting an effect from effect_list must reach the virtuals endpoint."""
 
     entity_id = await _light_entity_id(hass)
@@ -160,9 +157,7 @@ async def test_light_turn_on_with_effect(
     assert state.attributes.get("effect") == effect
 
 
-async def test_preset_selection_sticks(
-    hass: HomeAssistant, setup_entry  # noqa: ANN001
-) -> None:
+async def test_preset_selection_sticks(hass: HomeAssistant, setup_entry) -> None:
     """Picking "<effect> - <preset>" must stay selected, not snap back.
 
     Regression guard: the preset was applied to LedFx correctly, but the light
@@ -188,7 +183,7 @@ async def test_preset_selection_sticks(
 
 
 async def test_preset_survives_coordinator_refresh(
-    hass: HomeAssistant, setup_entry  # noqa: ANN001
+    hass: HomeAssistant, setup_entry
 ) -> None:
     """The active preset is inferred from the effect config on every refresh.
 
@@ -213,9 +208,7 @@ async def test_preset_survives_coordinator_refresh(
     assert hass.states.get(entity_id).attributes["effect"] == "rainbow - slow-roll"
 
 
-async def test_plain_effect_reports_no_preset(
-    hass: HomeAssistant, setup_entry  # noqa: ANN001
-) -> None:
+async def test_plain_effect_reports_no_preset(hass: HomeAssistant, setup_entry) -> None:
     """A bare effect must not be reported with a stale preset suffix."""
 
     entity_id = await _light_entity_id(hass)
@@ -239,7 +232,7 @@ async def test_plain_effect_reports_no_preset(
 
 
 async def test_every_platform_action_dispatches(
-    hass: HomeAssistant, setup_entry  # noqa: ANN001
+    hass: HomeAssistant, setup_entry
 ) -> None:
     """Exercise the action of every platform, not just light.
 
@@ -257,9 +250,9 @@ async def test_every_platform_action_dispatches(
 
     # Per-effect number/switch/select entities were removed in 3.2.0.
     for domain in ("number", "switch"):
-        assert not [
-            e for e in entities if e.domain == domain
-        ], f"{domain} entities should no longer be created"
+        assert not [e for e in entities if e.domain == domain], (
+            f"{domain} entities should no longer be created"
+        )
 
     light_id = await _light_entity_id(hass)
     await hass.services.async_call(
@@ -297,7 +290,7 @@ async def test_every_platform_action_dispatches(
     assert hass.states.get(audio_id).state == options[-1]
 
 
-async def test_color_pattern_select(hass: HomeAssistant, setup_entry) -> None:  # noqa: ANN001
+async def test_color_pattern_select(hass: HomeAssistant, setup_entry) -> None:
     """The color pattern select applies a gradient to the active effect.
 
     One entity per virtual rather than one per effect setting: "gradient" is
@@ -357,7 +350,7 @@ async def test_color_pattern_select(hass: HomeAssistant, setup_entry) -> None:  
 
 async def test_color_pattern_not_adopted_from_old_disabled_entity(
     hass: HomeAssistant,
-    enable_custom_integrations,  # noqa: ANN001
+    enable_custom_integrations,
     ledfx_server: int,
 ) -> None:
     """A pre-3.2.0 per-effect select must not leave the new one disabled.

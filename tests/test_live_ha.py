@@ -25,7 +25,8 @@ from homeassistant.const import (
     CONF_TIMEOUT,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ledfx.const import (
@@ -44,7 +45,7 @@ pytestmark = pytest.mark.skipif(not HOST, reason="LEDFX_HOST not set")
 
 
 @pytest.fixture
-def allow_ledfx_host(socket_enabled):  # noqa: ANN001
+def allow_ledfx_host(socket_enabled):
     """pytest-homeassistant-custom-component pins the allowlist to 127.0.0.1."""
 
     pytest_socket.socket_allow_hosts([HOST, "127.0.0.1"], allow_unix_socket=True)
@@ -53,8 +54,8 @@ def allow_ledfx_host(socket_enabled):  # noqa: ANN001
 
 async def test_setup_entry_against_live_ledfx(
     hass: HomeAssistant,
-    enable_custom_integrations,  # noqa: ANN001
-    allow_ledfx_host,  # noqa: ANN001
+    enable_custom_integrations,
+    allow_ledfx_host,
 ) -> None:
     """The integration must set up and create entities from a real LedFx."""
 
@@ -116,9 +117,7 @@ async def test_setup_entry_against_live_ledfx(
     # symptom of entity descriptions failing to build.
     device_reg = dr.async_get(hass)
     devices = [
-        d
-        for d in device_reg.devices.values()
-        if entry.entry_id in d.config_entries
+        d for d in device_reg.devices.values() if entry.entry_id in d.config_entries
     ]
     per_device = {
         d.name: sum(1 for e in entities if e.device_id == d.id) for d in devices
@@ -137,8 +136,8 @@ async def test_setup_entry_against_live_ledfx(
 
 async def test_reload_and_unload_cycle(
     hass: HomeAssistant,
-    enable_custom_integrations,  # noqa: ANN001
-    allow_ledfx_host,  # noqa: ANN001
+    enable_custom_integrations,
+    allow_ledfx_host,
 ) -> None:
     """Reload and unload must work on an entry that is not fresh from the flow.
 

@@ -1,11 +1,8 @@
-pytest-homeassistant-custom-component>=0.8.11
-aiohttp_cors>=0.7.0
-aiodiscover>=1.4.8
-scapy>=2.4.5
-async_upnp_client>=0.27.0
+# Brings in Home Assistant itself plus pytest, pytest-asyncio and pytest-socket
+# at versions matching the Home Assistant release it targets.
+pytest-homeassistant-custom-component
 
-codecov>=2.1.12
-coverage>=6.3.2
-pytest>=7.1.1
-pytest-cov>=2.12.1
-pytest-httpx>=0.20.0
+# Linting and formatting; pinned loosely so CI matches local runs.
+ruff>=0.16
+
+pytest-cov

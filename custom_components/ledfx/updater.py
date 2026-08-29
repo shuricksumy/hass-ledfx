@@ -15,8 +15,8 @@ from homeassistant.components.sensor import SensorEntityDescription, SensorState
 from homeassistant.const import EntityCategory
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers import event
-from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.entity import EntityDescription
 from homeassistant.helpers.httpx_client import get_async_client
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
@@ -26,6 +26,7 @@ from httpx import USE_CLIENT_DEFAULT, codes
 from .client import LedFxClient
 from .const import (
     ATTR_DEVICE_SW_VERSION,
+    ATTR_EFFECT_GRADIENT,
     ATTR_LIGHT_BRIGHTNESS,
     ATTR_LIGHT_COLOR,
     ATTR_LIGHT_CONFIG,
@@ -37,7 +38,6 @@ from .const import (
     ATTR_LIGHT_PRESET,
     ATTR_LIGHT_STATE,
     ATTR_SELECT_AUDIO_INPUT,
-    ATTR_EFFECT_GRADIENT,
     ATTR_SELECT_AUDIO_INPUT_OPTIONS,
     ATTR_STATE,
     DEFAULT_SCAN_INTERVAL,
@@ -307,8 +307,8 @@ class LedFxUpdater(DataUpdateCoordinator):
 
         response: dict = await self.client.schema()
 
-        if "effects" in response and response["effects"]:
-            data[ATTR_LIGHT_EFFECTS] = sorted(list(response["effects"].keys()))
+        if response.get("effects"):
+            data[ATTR_LIGHT_EFFECTS] = sorted(response["effects"].keys())
 
             # Only the color-typed keys are needed, to show colors by name in
             # the light attributes and translate them back when writing.
@@ -381,16 +381,16 @@ class LedFxUpdater(DataUpdateCoordinator):
                             self.hass, SIGNAL_NEW_SENSOR, self.sensors[code]
                         )
 
-        if "ledfx_presets" in response and response["ledfx_presets"]:
+        if response.get("ledfx_presets"):
             data[ATTR_LIGHT_DEFAULT_PRESETS] = {
-                effect: sorted(list(presets.keys()))
+                effect: sorted(presets.keys())
                 for effect, presets in response["ledfx_presets"].items()
             }
             self.presets[ATTR_LIGHT_DEFAULT_PRESETS] = response["ledfx_presets"]
 
-        if "user_presets" in response and response["user_presets"]:
+        if response.get("user_presets"):
             data[ATTR_LIGHT_CUSTOM_PRESETS] = {
-                effect: sorted(list(presets.keys()))
+                effect: sorted(presets.keys())
                 for effect, presets in response["user_presets"].items()
             }
             self.presets[ATTR_LIGHT_CUSTOM_PRESETS] = response["user_presets"]
@@ -408,7 +408,7 @@ class LedFxUpdater(DataUpdateCoordinator):
 
         v_response: dict = await self.client.virtuals()
 
-        if "virtuals" in v_response and v_response["virtuals"]:
+        if v_response.get("virtuals"):
             devices: dict = {}
             for key, virtual in v_response["virtuals"].items():
                 devices[key] = virtual
@@ -438,9 +438,7 @@ class LedFxUpdater(DataUpdateCoordinator):
         """
 
         for code, device in devices.items():
-            data[f"{code}_{ATTR_LIGHT_STATE}"] = bool(
-                "effect" in device and device["effect"]
-            )
+            data[f"{code}_{ATTR_LIGHT_STATE}"] = bool(device.get("effect"))
 
             if data[f"{code}_{ATTR_LIGHT_STATE}"]:
                 # LedFx does not say which preset is active, so infer it by
@@ -538,7 +536,7 @@ class LedFxUpdater(DataUpdateCoordinator):
 
         response: dict = await self.client.scenes()
 
-        if "scenes" in response and response["scenes"]:
+        if response.get("scenes"):
             for code, scene in response["scenes"].items():
                 if code in self.buttons:
                     continue
@@ -621,7 +619,7 @@ def convert_brightness(brightness: float, is_reverse: bool = False) -> float:
         return min(float(math.ceil(brightness * 100 * 2.55)), 255)
 
     # pylint: disable=consider-using-f-string
-    return float("{:.1f}".format(min(float(brightness / 100 / 2.55), 1.0)))
+    return float(f"{min(float(brightness / 100 / 2.55), 1.0):.1f}")
 
 
 @callback

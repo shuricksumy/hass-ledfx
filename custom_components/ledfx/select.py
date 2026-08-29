@@ -13,18 +13,17 @@ from homeassistant.components.select import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from homeassistant.helpers.dispatcher import async_dispatcher_connect
-
 from .const import (
+    ATTR_EFFECT_GRADIENT,
     ATTR_LIGHT_EFFECT,
     ATTR_LIGHT_EFFECT_CONFIG,
     ATTR_LIGHT_STATE,
     ATTR_SELECT_AUDIO_INPUT,
     ATTR_SELECT_AUDIO_INPUT_NAME,
     ATTR_SELECT_AUDIO_INPUT_OPTIONS,
-    ATTR_EFFECT_GRADIENT,
     ATTR_SELECT_COLOR_PATTERN,
     ATTR_SELECT_COLOR_PATTERN_NAME,
     ATTR_STATE,
@@ -142,10 +141,8 @@ class LedFxSelect(LedFxEntity, SelectEntity):
 
         self._attr_current_option = updater.data.get(entity.description.key, None)
 
-        self._options_key = (
-            OPTIONS_MAP[entity.description.key]
-            if entity.description.key in OPTIONS_MAP
-            else f"{entity.description.key}_options"
+        self._options_key = OPTIONS_MAP.get(
+            entity.description.key, f"{entity.description.key}_options"
         )
 
         options: dict | list = updater.data.get(self._options_key, [])
