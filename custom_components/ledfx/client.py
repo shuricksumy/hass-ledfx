@@ -316,7 +316,7 @@ class LedFxClient:
 
         try:
             _content = json.loads(content)
-        except (ValueError, TypeError):  # pragma: no cover
+        except ValueError, TypeError:  # pragma: no cover
             _content = str(content)
 
         self.diagnostics[path] = {

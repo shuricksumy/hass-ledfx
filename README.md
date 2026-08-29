@@ -17,7 +17,8 @@ configuration.
 
 * LedFx **2.x** — developed and verified against
   [v2.1.9](https://github.com/LedFx/LedFx/releases/tag/v2.1.9)
-* Home Assistant 2023.8 or newer (developed and verified on 2026.8)
+* Home Assistant **2026.8** or newer, on Python 3.14 (developed and verified
+  against 2026.8.3)
 
 LedFx 2.x moved effects and presets onto virtuals and dropped them from
 devices, so this release targets the `virtuals` API only. LedFx 0.10.x is no
