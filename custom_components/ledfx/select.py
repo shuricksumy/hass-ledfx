@@ -269,7 +269,7 @@ class LedFxSelect(LedFxEntity, SelectEntity):
         """
 
         code: str = (
-            ActionType.DEVICE
+            ActionType.DEVICE.value
             if self._type == ActionType.DEVICE
             else self.entity_description.key
         )

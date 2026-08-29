@@ -10,7 +10,8 @@ import json, re, sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 EFFECT_KEYS = {"blur","flip","mirror","brightness","background_color",
-               "background_brightness","diag","advanced","gradient","speed"}
+               "background_brightness","diag","advanced","gradient","speed",
+               "frequency_range"}
 EFFECTS = {"rainbow","wavelength","scroll"}
 
 STATE = {
@@ -28,7 +29,8 @@ STATE = {
 def eff_defaults(t):
     return {"blur": 0.0, "flip": False, "mirror": False, "brightness": 1.0,
             "background_color": "#000000", "background_brightness": 1.0,
-            "diag": False, "speed": 1.0}
+            "diag": False, "speed": 1.0, "gradient": "Rainbow",
+            "frequency_range": "Lows (beat+bass)"}
 
 
 def _preset(**overrides):
@@ -149,6 +151,9 @@ class H(BaseHTTPRequestHandler):
                     "speed": {"type": "number", "title": "Speed", "minimum": 0.0, "maximum": 5.0},
                     "flip": {"type": "boolean", "title": "Flip"},
                     "background_color": {"type": "color", "gradient": False, "title": "Background Color"},
+                    "gradient": {"type": "color", "gradient": True, "title": "Gradient"},
+                    "frequency_range": {"type": "string", "title": "Frequency Range",
+                                        "enum": ["Lows (beat+bass)", "Mids", "High"]},
                 }}, "id": e, "name": e.title(), "category": "Non-Reactive"} for e in EFFECTS},
                 "audio": {"schema": {"properties": {
                     "audio_device": {"type": "string", "title": "Audio Device",
