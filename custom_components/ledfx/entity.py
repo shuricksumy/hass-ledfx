@@ -11,7 +11,6 @@ from homeassistant.helpers.entity import EntityDescription
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
-    ATTR_FIELD_TYPE,
     ATTR_LIGHT_BRIGHTNESS,
     ATTR_LIGHT_COLOR,
     ATTR_LIGHT_EFFECT,
@@ -19,7 +18,6 @@ from .const import (
     ATTR_STATE,
     ATTRIBUTION,
 )
-from .enum import Version
 from .helper import generate_entity_id
 from .updater import LedFxUpdater, convert_brightness
 
@@ -113,12 +111,11 @@ class LedFxEntity(CoordinatorEntity):
             }
         )
 
-        if self._updater.version == Version.V2:
-            config |= {
-                "background_color": self._updater.data.get(
-                    f"{self._attr_device_code}_{ATTR_LIGHT_COLOR}"
-                )
-            }
+        config |= {
+            "background_color": self._updater.data.get(
+                f"{self._attr_device_code}_{ATTR_LIGHT_COLOR}"
+            )
+        }
 
         config |= {code: value}
 
@@ -152,10 +149,7 @@ class LedFxEntity(CoordinatorEntity):
 
         result: dict = copy.deepcopy(config)
 
-        if (
-            code in self._updater.effect_properties
-            and self._updater.effect_properties[code][ATTR_FIELD_TYPE] == "color"
-        ):  # pragma: no cover
+        if code in self._updater.color_properties:  # pragma: no cover
             if value in self._updater.colors:
                 result[code] = self._updater.colors[value]
             elif value in self._updater.gradients:

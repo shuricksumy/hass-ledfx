@@ -13,28 +13,16 @@ from homeassistant.components.select import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
-    ATTR_DEVICE,
-    ATTR_FIELD_EFFECTS,
-    ATTR_FIELD_OPTIONS,
-    ATTR_FIELD_TYPE,
-    ATTR_LIGHT_EFFECT,
-    ATTR_LIGHT_EFFECT_CONFIG,
-    ATTR_LIGHT_STATE,
     ATTR_SELECT_AUDIO_INPUT,
     ATTR_SELECT_AUDIO_INPUT_NAME,
     ATTR_SELECT_AUDIO_INPUT_OPTIONS,
     ATTR_STATE,
-    SELECT_ICONS,
-    SIGNAL_NEW_SELECT,
 )
 from .entity import LedFxEntity
-from .enum import ActionType, Version
 from .exceptions import LedFxError
-from .helper import generate_entity_id
 from .updater import LedFxEntityDescription, LedFxUpdater, async_get_updater
 
 PARALLEL_UPDATES = 0
@@ -74,15 +62,13 @@ async def async_setup_entry(
     def add_select(entity: LedFxEntityDescription) -> None:
         """Add select.
 
-        :param entity: LedFxEntityDescription: Sensor object
+        :param entity: LedFxEntityDescription: Select object
         """
 
         async_add_entities(
             [
                 LedFxSelect(
-                    f"{config_entry.entry_id}-{entity.device_code}-{entity.description.key}"
-                    if entity.type == ActionType.DEVICE
-                    else f"{config_entry.entry_id}-{entity.description.key}",
+                    f"{config_entry.entry_id}-{entity.description.key}",
                     entity,
                     updater,
                 )
@@ -94,19 +80,11 @@ async def async_setup_entry(
             LedFxEntityDescription(description=select, device_info=updater.device_info)
         )
 
-    for select in updater.selects.values():
-        add_select(select)
-
-    updater.new_select_callback = async_dispatcher_connect(
-        hass, SIGNAL_NEW_SELECT, add_select
-    )
-
 
 class LedFxSelect(LedFxEntity, SelectEntity):
     """LedFx select entry."""
 
     _options_key: str
-    _type: ActionType
 
     def __init__(
         self,
@@ -118,56 +96,14 @@ class LedFxSelect(LedFxEntity, SelectEntity):
 
         :param unique_id: str: Unique ID
         :param entity: LedFxEntityDescription object
-        :param updater: LedFxUpdater: Luci updater object
+        :param updater: LedFxUpdater: LedFx updater object
         """
 
         LedFxEntity.__init__(
             self, unique_id, entity.description, updater, ENTITY_ID_FORMAT
         )
 
-        self._type = entity.type
         self._attr_device_info = entity.device_info
-        self._attr_available: bool = True
-
-        if entity.type == ActionType.DEVICE:
-            self._attr_device_code = entity.device_code
-
-            self.entity_id = generate_entity_id(
-                ENTITY_ID_FORMAT,
-                updater.ip,
-                f"{entity.device_code}_{entity.description.key}",
-            )
-
-            self._attr_current_option = updater.data.get(
-                f"{entity.device_code}_{ATTR_LIGHT_EFFECT_CONFIG}", {}
-            ).get(entity.description.key)
-
-            self._attr_options = (
-                entity.extra.get(ATTR_FIELD_OPTIONS, []) if entity.extra else []
-            )
-
-            if entity.extra:
-                self._attr_field_type = entity.extra.get(ATTR_FIELD_TYPE)
-
-            self._attr_extra_state_attributes = {
-                ATTR_DEVICE: self._attr_device_code,
-                ATTR_FIELD_EFFECTS: entity.extra.get(ATTR_FIELD_EFFECTS, [])
-                if entity.extra
-                else [],
-            }
-
-            self._attr_available = bool(
-                updater.data.get(ATTR_STATE, False)
-                and len(self._attr_options) > 0
-                and updater.data.get(f"{self._attr_device_code}_{ATTR_LIGHT_STATE}")
-                and updater.data.get(f"{self._attr_device_code}_{ATTR_LIGHT_EFFECT}")
-                in self._attr_extra_state_attributes[ATTR_FIELD_EFFECTS]
-            )
-
-            if entity.description.key in SELECT_ICONS:
-                self._attr_icon = SELECT_ICONS[entity.description.key]
-
-            return
 
         self._attr_current_option = updater.data.get(entity.description.key, None)
 
@@ -189,34 +125,13 @@ class LedFxSelect(LedFxEntity, SelectEntity):
     def _handle_coordinator_update(self) -> None:
         """Update state."""
 
-        is_available: bool = self._attr_available
-        current_option: str = self._attr_current_option
-        options: dict | list = self._attr_options
+        current_option = self._updater.data.get(self.entity_description.key, False)
+        options: dict | list = self._updater.data.get(self._options_key, [])
+        options = list(options.values()) if isinstance(options, dict) else options
 
-        if self._type == ActionType.DEVICE:
-            current_option = self._updater.data.get(
-                f"{self._attr_device_code}_{ATTR_LIGHT_EFFECT_CONFIG}", {}
-            ).get(self.entity_description.key)
-
-            is_available = bool(
-                self._updater.data.get(ATTR_STATE, False)
-                and len(options) > 0
-                and self._updater.data.get(
-                    f"{self._attr_device_code}_{ATTR_LIGHT_STATE}"
-                )
-                and self._updater.data.get(
-                    f"{self._attr_device_code}_{ATTR_LIGHT_EFFECT}"
-                )
-                in self._attr_extra_state_attributes[ATTR_FIELD_EFFECTS]
-            )
-        else:
-            current_option = self._updater.data.get(self.entity_description.key, False)
-            options = self._updater.data.get(self._options_key, [])
-            options = list(options.values()) if isinstance(options, dict) else options
-
-            is_available = bool(
-                self._updater.data.get(ATTR_STATE, False) and len(options) > 0
-            )
+        is_available: bool = bool(
+            self._updater.data.get(ATTR_STATE, False) and len(options) > 0
+        )
 
         if (
             self._attr_current_option == current_option
@@ -241,9 +156,7 @@ class LedFxSelect(LedFxEntity, SelectEntity):
         options: dict = self._updater.data.get(self._options_key, {})
         if option_ids := [_id for _id, name in options.items() if name == option]:
             try:
-                await self._updater.client.set_audio_device(
-                    int(option_ids[0]), self._updater.version == Version.V2
-                )
+                await self._updater.client.set_audio_device(int(option_ids[0]))
 
                 return True
             except LedFxError as _e:
@@ -251,34 +164,15 @@ class LedFxSelect(LedFxEntity, SelectEntity):
 
         return False
 
-    async def _device_change(self, option: str) -> bool:
-        """Device input
-
-        :param option: str: Option value
-        :return bool: Result
-        """
-
-        await self.async_update_effect(self.entity_description.key, option)
-
-        return True
-
     async def async_select_option(self, option: str) -> None:
         """Select option
 
         :param option: str: Option
         """
 
-        code: str = (
-            ActionType.DEVICE.value
-            if self._type == ActionType.DEVICE
-            else self.entity_description.key
-        )
-
-        if action := getattr(self, f"_{code}_change"):
+        if action := getattr(self, f"_{self.entity_description.key}_change"):
             if await action(option):
-                if self._type != ActionType.DEVICE:
-                    self._updater.data[self.entity_description.key] = option
-
+                self._updater.data[self.entity_description.key] = option
                 self._attr_current_option = option
 
             self.async_write_ha_state()

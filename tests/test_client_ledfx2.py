@@ -150,18 +150,10 @@ def test_effect_puts_to_virtual_effects() -> None:
     assert body(request) == {"config": {"brightness": 0.5}, "type": "rainbow"}
 
 
-def test_set_audio_device_legacy_uses_audio_device_key() -> None:
-    """LedFx 2.x reads data["audio_device"]; "index" is silently ignored."""
+def test_set_audio_device_uses_config_endpoint() -> None:
+    """LedFx 2.x sets the audio input through /api/config."""
 
     request = call("set_audio_device", 1)
-
-    assert request.method == "PUT"
-    assert request.url.path == "/api/audio/devices"
-    assert body(request) == {"audio_device": 1}
-
-
-def test_set_audio_device_new_uses_config_endpoint() -> None:
-    request = call("set_audio_device", 1, True)
 
     assert request.method == "PUT"
     assert request.url.path == "/api/config"

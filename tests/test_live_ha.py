@@ -36,7 +36,6 @@ from custom_components.ledfx.const import (
     OPTION_IS_FROM_FLOW,
     UPDATER,
 )
-from custom_components.ledfx.enum import Version
 
 HOST = os.environ.get("LEDFX_HOST")
 PORT = os.environ.get("LEDFX_PORT", "8888")
@@ -78,16 +77,11 @@ async def test_setup_entry_against_live_ledfx(
     updater = hass.data[DOMAIN][entry.entry_id][UPDATER]
 
     print(f"\nLedFx version:     {updater.data.get(ATTR_DEVICE_SW_VERSION)}")
-    print(f"API version:       {updater.version}")
     print(f"lights:            {len(updater.devices)}")
-    print(f"effect properties: {len(updater.effect_properties)}")
-    print(f"numbers:           {len(updater.numbers)}")
-    print(f"switches:          {len(updater.switches)}")
-    print(f"selects:           {len(updater.selects)}")
+    print(f"color properties:  {len(updater.color_properties)}")
     print(f"scene buttons:     {len(updater.buttons)}")
 
     assert updater.last_update_success, "coordinator update failed"
-    assert updater.version == Version.V2, "LedFx 2.x should be detected"
     assert updater.devices, "no lights discovered"
 
     # /api/info carries the LedFx release; /api/config only has the config
@@ -95,13 +89,7 @@ async def test_setup_entry_against_live_ledfx(
     version = updater.data.get(ATTR_DEVICE_SW_VERSION)
     assert version and version.startswith("2."), f"unexpected version {version!r}"
 
-    # Regression guard: HA rebuilds entity descriptions through
-    # homeassistant.util.frozen_dataclass_compat, which broke the isinstance()
-    # dispatch in _prepare_device_fields and left every effect control missing.
-    assert updater.effect_properties, "no effect properties parsed from schema"
-    assert updater.numbers, "no effect number controls built"
-    assert updater.switches, "no effect switch controls built"
-    assert updater.selects, "no effect select controls built"
+    assert updater.color_properties, "no color properties parsed from schema"
 
     registry = er.async_get(hass)
     entities = [
@@ -112,8 +100,14 @@ async def test_setup_entry_against_live_ledfx(
         by_domain[ent.domain] = by_domain.get(ent.domain, 0) + 1
     print(f"registered:        {by_domain}")
 
-    for domain in ("light", "sensor", "binary_sensor", "select", "number", "switch"):
+    for domain in ("light", "sensor", "binary_sensor", "select"):
         assert by_domain.get(domain, 0) > 0, f"no {domain} entities registered"
+
+    # Per-effect controls were removed in 3.2.0; thousands of unused, disabled
+    # registry rows per instance.
+    for domain in ("number", "switch"):
+        assert by_domain.get(domain, 0) == 0, f"{domain} entities should be gone"
+    assert by_domain["select"] == 1, "only the audio input select should remain"
 
     # Every device page must show entities; an empty device page is the
     # symptom of entity descriptions failing to build.

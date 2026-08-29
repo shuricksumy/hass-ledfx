@@ -14,9 +14,11 @@ from homeassistant.const import (
     CONF_USERNAME,
     EVENT_HOMEASSISTANT_STOP,
 )
-from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant
+from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 
 from .const import (
+    ATTR_SELECT_AUDIO_INPUT,
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_TIMEOUT,
     DOMAIN,
@@ -57,6 +59,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         get_config_value(entry, CONF_TIMEOUT, DEFAULT_TIMEOUT),
     )
 
+    _async_remove_stale_entities(hass, entry)
+
     hass.data.setdefault(DOMAIN, {})
 
     hass.data[DOMAIN][entry.entry_id] = {UPDATER: _updater}
@@ -66,7 +70,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     # Populate the coordinator before the platforms are forwarded: every
-    # entity is built from updater.devices / numbers / switches / selects.
+    # entity is built from updater.devices, buttons, sensors and selects.
     #
     # This must stay inside async_setup_entry. Deferring the forward to a
     # call_later task returns True before the platforms exist, and Home
@@ -87,6 +91,40 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     return True
+
+
+@callback
+def _async_remove_stale_entities(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Drop registry entries for entities this integration no longer creates.
+
+    Up to 3.1.0 every effect setting became a number, switch or select entity
+    on every virtual - thousands of rows per instance, disabled by default and
+    never used. They are gone now, so clear them out instead of leaving the
+    registry full of entities marked "no longer being provided".
+
+    :param hass: HomeAssistant: Home Assistant object
+    :param entry: ConfigEntry: Config Entry object
+    """
+
+    registry = er.async_get(hass)
+
+    stale: list[str] = [
+        entity.entity_id
+        for entity in er.async_entries_for_config_entry(registry, entry.entry_id)
+        if entity.domain in ("number", "switch")
+        or (
+            entity.domain == "select"
+            and entity.unique_id != f"{entry.entry_id}-{ATTR_SELECT_AUDIO_INPUT}"
+        )
+    ]
+
+    for entity_id in stale:
+        registry.async_remove(entity_id)
+
+    if stale:
+        _LOGGER.info(
+            "Removed %s per-effect entities that are no longer provided", len(stale)
+        )
 
 
 async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:

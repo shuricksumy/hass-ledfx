@@ -1,16 +1,206 @@
-# LedFX for Home Assistant
-[![hacs_badge](https://img.shields.io/badge/HACS-Default-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
-[![CodeQL](https://img.shields.io/badge/CODEQL-Passing-30C854.svg?style=for-the-badge)](https://github.com/dmamontov/hass-miwifi/actions?query=CodeQL)
-[![Telegram](https://img.shields.io/badge/Telegram-channel-34ABDF.svg?style=for-the-badge)](https://t.me/hass_mamontov_tech)
+# LedFx for Home Assistant
 
-Component for deep integration [LedFx](https://github.com/LedFx/LedFx) from [Home Assistant](https://www.home-assistant.io/).
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
+
+Home Assistant integration for [LedFx](https://github.com/LedFx/LedFx), the
+real-time LED effect controller.
+
+Every LedFx **virtual** becomes a light entity with its effects and presets as
+the effect list, plus entities for the audio input, scenes and LedFx's audio
+configuration.
 
 ## Requirements
-* LedFx version >= [2.0.0](https://github.com/LedFx/LedFx/releases) (verified against [v2.1.9](https://github.com/LedFx/LedFx/releases/tag/v2.1.9))
 
-Older LedFx 0.10.x instances are still discovered and reported, but effect
-control now targets the `virtuals` API only — LedFx 2.x removed effects and
-presets from devices entirely.
+* LedFx **2.x** — developed and verified against
+  [v2.1.9](https://github.com/LedFx/LedFx/releases/tag/v2.1.9)
+* Home Assistant 2023.6 or newer (verified on 2026.8)
+
+LedFx 2.x moved effects and presets onto virtuals and dropped them from
+devices, so this release targets the `virtuals` API only. LedFx 0.10.x is no
+longer supported.
+
+## Install
+
+**HACS** (recommended) — add this repository as a custom repository, then
+download it and restart Home Assistant.
+
+**Manually** — copy `custom_components/ledfx` into your `config/custom_components`
+directory and restart. You won't get update notifications this way.
+
+## Config
+
+`Settings` > `Devices & Services` > `Add Integration` > `LedFx`
+
+Enter the IP address and port of your LedFx instance. Tick **basic auth** if
+LedFx sits behind a reverse proxy that requires it, then supply the username
+and password.
+
+❗ YAML configuration is not supported.
+
+## Entities
+
+For a LedFx at `192.168.1.50`, entity IDs look like this:
+
+| Entity | Example | What it does |
+| --- | --- | --- |
+| Light (one per virtual) | `light.ledfx_192_168_1_50_matrix` | On/off, brightness, colour, effect and preset selection |
+| | `light.ledfx_192_168_1_50_wled_144_l` | Entity IDs use the LedFx **virtual id**, not its display name |
+| Audio input | `select.ledfx_192_168_1_50_audio_input` | Switches LedFx's audio source |
+| Scene | `button.ledfx_192_168_1_50_party` | Activates a LedFx scene |
+| Connection state | `binary_sensor.ledfx_192_168_1_50_state` | Whether LedFx is reachable |
+| Audio settings | `sensor.ledfx_192_168_1_50_min_volume` | LedFx audio config values (disabled by default) |
+
+The light's `effect_list` contains both bare effects (`rain`) and presets
+(`rain - ripples`, plus any of your own user presets). Selecting a preset
+applies it and keeps it selected; changing any effect setting afterwards drops
+back to the bare effect name, because the config no longer matches the preset.
+
+## Examples
+
+### Toggle a virtual, turning it on with a specific effect
+
+`light.toggle` accepts every `turn_on` parameter and ignores them when turning
+off, so no templating is needed.
+
+```yaml
+type: button
+entity: light.ledfx_192_168_1_50_matrix
+name: Matrix
+icon: mdi:equalizer
+tap_action:
+  action: perform-action
+  perform_action: light.toggle
+  target:
+    entity_id: light.ledfx_192_168_1_50_matrix
+  data:
+    effect: rain
+hold_action:
+  action: more-info
+```
+
+### A row of preset buttons
+
+Each button applies one preset. Re-tapping a button that is already active
+re-applies the preset, which is a handy way to reset an effect after fiddling
+with its settings.
+
+```yaml
+type: horizontal-stack
+cards:
+  - type: button
+    name: Ripples
+    icon: mdi:water
+    tap_action:
+      action: perform-action
+      perform_action: light.turn_on
+      target:
+        entity_id: light.ledfx_192_168_1_50_matrix
+      data:
+        effect: rain - ripples
+  - type: button
+    name: Equalizer
+    icon: mdi:equalizer
+    tap_action:
+      action: perform-action
+      perform_action: light.turn_on
+      target:
+        entity_id: light.ledfx_192_168_1_50_matrix
+      data:
+        effect: equalizer2d - cold
+  - type: button
+    name: Off
+    icon: mdi:power
+    tap_action:
+      action: perform-action
+      perform_action: light.turn_off
+      target:
+        entity_id: light.ledfx_192_168_1_50_matrix
+```
+
+### Full control panel
+
+The stock light card gives brightness, colour and the whole effect/preset list
+in its more-info dialog.
+
+```yaml
+type: entities
+title: LedFx
+entities:
+  - entity: light.ledfx_192_168_1_50_matrix
+  - entity: light.ledfx_192_168_1_50_wled_144_l
+  - entity: light.ledfx_192_168_1_50_wled_144_r
+  - type: divider
+  - entity: select.ledfx_192_168_1_50_audio_input
+  - entity: binary_sensor.ledfx_192_168_1_50_state
+```
+
+### Custom button-card with state feedback
+
+Requires [button-card](https://github.com/custom-cards/button-card) from HACS.
+
+```yaml
+type: custom:button-card
+entity: light.ledfx_192_168_1_50_matrix
+icon: mdi:equalizer
+show_name: false
+show_label: true
+label: Matrix
+tap_action:
+  action: perform-action
+  perform_action: light.toggle
+  target:
+    entity_id: light.ledfx_192_168_1_50_matrix
+  data:
+    effect: rain
+hold_action:
+  action: more-info
+layout: vertical
+size: 50%
+state:
+  - value: "on"
+    styles:
+      icon:
+        - color: var(--state-light-active-color)
+  - value: "off"
+    styles:
+      icon:
+        - color: var(--state-icon-color)
+        - opacity: 0.5
+styles:
+  card:
+    - height: 55px
+  label:
+    - font-size: 10px
+    - color: var(--secondary-text-color)
+    - margin-top: 2px
+```
+
+### Automation: sunset scene
+
+```yaml
+automation:
+  - alias: LedFx at sunset
+    triggers:
+      - trigger: sun
+        event: sunset
+    actions:
+      - action: light.turn_on
+        target:
+          entity_id: light.ledfx_192_168_1_50_matrix
+        data:
+          effect: equalizer2d - cold
+          brightness_pct: 60
+```
+
+### Selecting the audio input
+
+```yaml
+- action: select.select_option
+  target:
+    entity_id: select.ledfx_192_168_1_50_audio_input
+  data:
+    option: "ALSA: pulse"
+```
 
 ## Verifying against your LedFx
 
@@ -19,7 +209,7 @@ LedFx instance, so you can confirm the API contract without Home Assistant. It
 needs nothing but `httpx`.
 
 ```bash
-# read-only: every GET the coordinator depends on
+# read-only: every request the coordinator depends on
 python3 scripts/ledfx_api_check.py --host 192.168.1.50 --port 8888
 
 # also exercise turn-on / brightness / preset / turn-off (changes your lights,
@@ -27,49 +217,36 @@ python3 scripts/ledfx_api_check.py --host 192.168.1.50 --port 8888
 python3 scripts/ledfx_api_check.py --host 192.168.1.50 --port 8888 --write my-virtual
 ```
 
-To check offline, run the bundled strict mock of the LedFx 2.1.9 API instead:
+To check offline, run the bundled mock of the LedFx 2.x API instead:
 
 ```bash
 python3 scripts/mock_ledfx.py 8899 &
 python3 scripts/ledfx_api_check.py --host 127.0.0.1 --port 8899 --write my-strip
 ```
 
-The request-shape regression tests need no Home Assistant either:
+## Tests
+
+Request-shape tests need only `httpx`:
 
 ```bash
 python3 -m pytest tests/test_client_ledfx2.py -q
 ```
 
-## Important information
-* ❗ Effect controls (number, switch, select) are disabled by default. They must be enabled manually.
-* ❗ Controls (number, switch, select) if enabled, have the status `UNAVAILABLE` by default. After enabling the effect on the device, the status will be changed by those that are supported by this effect.
+The rest need the Home Assistant test harness (`requirements_test.txt`) and run
+against the bundled mock:
 
-## More info
+```bash
+python3 -m pytest tests/ -q -o asyncio_mode=auto
+```
 
-- [Install](https://github.com/dmamontov/hass-ledfx/wiki/Install)
-- [Config](https://github.com/dmamontov/hass-ledfx/wiki/Config)
-- [Entities](https://github.com/dmamontov/hass-ledfx/wiki/Entities)
-- [Performance](https://github.com/dmamontov/hass-ledfx/wiki/Performance)
-- [Diagnostics](https://github.com/dmamontov/hass-ledfx/wiki/Diagnostics)
-- [FAQ](https://github.com/dmamontov/hass-ledfx/wiki/FAQ)
+`tests/test_live_ha.py` additionally boots Home Assistant against a real LedFx,
+and is skipped unless `LEDFX_HOST` is set:
 
-## Install
-The easiest way to install the LedFx integration is with [HACS](https://hacs.xyz/). First install [HACS](https://hacs.xyz/) if you don’t have it yet. After installation you can find this integration in the [HACS](https://hacs.xyz/) store under integrations.
+```bash
+LEDFX_HOST=192.168.1.50 python3 -m pytest tests/test_live_ha.py -q -o asyncio_mode=auto
+```
 
-Alternatively, you can install it manually. Just copy and paste the content of the hass-ledfx/custom_components folder in your config/custom_components directory. As example, you will get the sensor.py file in the following path: /config/custom_components/ledfx/sensor.py. The disadvantage of a manual installation is that you won’t be notified about updates.
+## Credits
 
-## Config
-**Via GUI**
-
-`Settings` > `Integrations` > `Plus` > `LedFx`
-
-To connect, enter the ip address and port. And also if you use basic auth, enter the user and password.
-
-❗ Via YAML (legacy way) not supported
-
-## Performance
-![](/images/performance.gif)
-
-1. Install [lovelace-auto-entities](https://github.com/thomasloven/lovelace-auto-entities) from HACS
-2. Install [light-entity-card](https://github.com/ljmerza/light-entity-card) from HACS
-3. Add new Lovelace card before that replacing `device`: [example](https://gist.github.com/dmamontov/34d252351d9eda98f53b2d6180771f12)
+Originally written by [@dmamontov](https://github.com/dmamontov); this fork
+updates it for the LedFx 2.x API and current Home Assistant.

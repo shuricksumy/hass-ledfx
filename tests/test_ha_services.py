@@ -245,10 +245,7 @@ async def test_every_platform_action_dispatches(
 
     Each platform resolves its handler by building a method name at runtime,
     so a formatting change breaks them independently and invisibly -- setup
-    still succeeds and the entity still appears. Seven such sites existed;
-    light, button, number and switch were caught first, and select.py only
-    surfaced once an effect select (rather than the audio input select) was
-    actually driven.
+    still succeeds and the entity still appears.
     """
 
     registry = er.async_get(hass)
@@ -257,6 +254,12 @@ async def test_every_platform_action_dispatches(
         for e in registry.entities.values()
         if e.config_entry_id == setup_entry.entry_id
     ]
+
+    # Per-effect number/switch/select entities were removed in 3.2.0.
+    for domain in ("number", "switch"):
+        assert not [
+            e for e in entities if e.domain == domain
+        ], f"{domain} entities should no longer be created"
 
     light_id = await _light_entity_id(hass)
     await hass.services.async_call(
@@ -267,19 +270,6 @@ async def test_every_platform_action_dispatches(
     )
     await hass.async_block_till_done()
 
-    # Effect controls ship disabled; enable one of each kind and reload.
-    enabled: dict[str, str] = {}
-    for domain in ("number", "switch", "select"):
-        candidates = [
-            e for e in entities if e.domain == domain and e.disabled_by is not None
-        ]
-        assert candidates, f"no disabled {domain} effect controls were built"
-        enabled[domain] = candidates[0].entity_id
-        registry.async_update_entity(candidates[0].entity_id, disabled_by=None)
-
-    await hass.config_entries.async_reload(setup_entry.entry_id)
-    await hass.async_block_till_done()
-
     # button -> scene activation
     buttons = [e.entity_id for e in entities if e.domain == "button"]
     assert buttons, "no scene buttons were built"
@@ -288,39 +278,18 @@ async def test_every_platform_action_dispatches(
     )
     await hass.async_block_till_done()
 
-    # select -> audio input (service level, not an effect control)
-    audio = [e.entity_id for e in entities if e.entity_id.endswith("audio_input")]
-    assert audio, "no audio input select"
-    options = hass.states.get(audio[0]).attributes["options"]
+    # select -> audio input, the only select the integration still provides
+    selects = [e for e in entities if e.domain == "select"]
+    assert len(selects) == 1, f"expected only the audio input select, got {selects}"
+    audio_id = selects[0].entity_id
+    assert audio_id.endswith("audio_input")
+
+    options = hass.states.get(audio_id).attributes["options"]
     await hass.services.async_call(
         "select",
         "select_option",
-        {ATTR_ENTITY_ID: audio[0], "option": options[-1]},
+        {ATTR_ENTITY_ID: audio_id, "option": options[-1]},
         blocking=True,
     )
     await hass.async_block_till_done()
-    assert hass.states.get(audio[0]).state == options[-1]
-
-    # number / switch / select -> effect config controls
-    await hass.services.async_call(
-        "number",
-        "set_value",
-        {ATTR_ENTITY_ID: enabled["number"], "value": 1.0},
-        blocking=True,
-    )
-    await hass.async_block_till_done()
-
-    await hass.services.async_call(
-        "switch", "turn_on", {ATTR_ENTITY_ID: enabled["switch"]}, blocking=True
-    )
-    await hass.async_block_till_done()
-
-    select_options = hass.states.get(enabled["select"]).attributes["options"]
-    assert select_options, f"{enabled['select']} exposes no options"
-    await hass.services.async_call(
-        "select",
-        "select_option",
-        {ATTR_ENTITY_ID: enabled["select"], "option": select_options[0]},
-        blocking=True,
-    )
-    await hass.async_block_till_done()
+    assert hass.states.get(audio_id).state == options[-1]

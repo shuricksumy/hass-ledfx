@@ -186,9 +186,7 @@ class LedFxClient:
         :return dict: dict with api data.
         """
 
-        return await self.request(
-            "config", validate_field=("config", "configuration_version")
-        )
+        return await self.request("config", validate_field="configuration_version")
 
     async def colors(self) -> dict:
         """colors method.
@@ -281,21 +279,15 @@ class LedFxClient:
             {"config": config, "type": effect},
         )
 
-    async def set_audio_device(self, index: int, is_new: bool = False) -> dict:
-        """audio/devices set method.
+    async def set_audio_device(self, index: int) -> dict:
+        """audio device set method.
 
         :param index: int: device index
-        :param is_new: bool: Is new api
         :return dict: dict with api data.
         """
 
-        if is_new:
-            return await self.request(
-                "config", Method.PUT, {"audio": {"audio_device": index}}
-            )
-
         return await self.request(
-            "audio/devices", Method.PUT, {"audio_device": index}
+            "config", Method.PUT, {"audio": {"audio_device": index}}
         )
 
     async def run_scene(self, scene_id: str) -> dict:

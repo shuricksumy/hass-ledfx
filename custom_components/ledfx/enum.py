@@ -14,13 +14,6 @@ class Method(str, Enum):
     DELETE = "DELETE"
 
 
-class Version(Enum):
-    """Version enum"""
-
-    V1 = 1
-    V2 = 2
-
-
 class ActionType(str, Enum):
     """ActionType enum"""
 

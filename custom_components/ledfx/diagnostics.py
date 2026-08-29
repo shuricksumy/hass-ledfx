@@ -39,16 +39,7 @@ async def async_get_config_entry_diagnostics(
         if hasattr(_updater, "devices") and _updater.devices:
             _data["devices"] = list(_updater.devices.keys())
 
-        if hasattr(_updater, "numbers") and _updater.numbers:
-            _data["numbers"] = list(_updater.numbers.keys())
-
-        if hasattr(_updater, "selects") and _updater.selects:
-            _data["selects"] = list(_updater.selects.keys())
-
         if hasattr(_updater, "sensors") and _updater.sensors:
             _data["sensors"] = list(_updater.sensors.keys())
-
-        if hasattr(_updater, "switches") and _updater.switches:
-            _data["switches"] = list(_updater.switches.keys())
 
     return _data

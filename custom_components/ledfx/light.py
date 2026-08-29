@@ -36,7 +36,7 @@ from .const import (
     SIGNAL_NEW_DEVICE,
 )
 from .entity import LedFxEntity
-from .enum import ActionType, EffectCategory, Version
+from .enum import ActionType, EffectCategory
 from .helper import build_effects, find_effect, hex_to_rgbw, rgbw_to_hex
 from .updater import (
     LedFxEntityDescription,
@@ -121,12 +121,8 @@ class LedFxLight(LedFxEntity, LightEntity):
 
         # Brightness and color are declared through color modes; ColorMode.RGBW
         # already implies brightness support.
-        if updater.version == Version.V2:
-            self._attr_supported_color_modes = {ColorMode.RGBW}
-            self._attr_color_mode = ColorMode.RGBW
-        else:
-            self._attr_supported_color_modes = {ColorMode.BRIGHTNESS}
-            self._attr_color_mode = ColorMode.BRIGHTNESS
+        self._attr_supported_color_modes = {ColorMode.RGBW}
+        self._attr_color_mode = ColorMode.RGBW
 
         self._attr_is_on = updater.data.get(
             f"{self._attr_device_code}_{ATTR_LIGHT_STATE}", False

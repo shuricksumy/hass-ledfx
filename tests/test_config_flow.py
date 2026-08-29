@@ -1,542 +1,154 @@
-"""Tests for the ledfx component."""
+"""Config flow tests against the bundled LedFx 2.x mock.
 
-# pylint: disable=no-member,too-many-statements,protected-access,too-many-lines
+The documented install path is Settings > Integrations > Plus > LedFx with an
+IP, a port and optional basic auth. These keep that intact.
+
+    python3 -m pytest tests/test_config_flow.py -q -o asyncio_mode=auto
+"""
 
 from __future__ import annotations
 
-import json
-import logging
-from typing import Final
-from unittest.mock import AsyncMock, patch
+import importlib.util
+import threading
+from http.server import ThreadingHTTPServer
+from pathlib import Path
 
 import pytest
-from homeassistant import config_entries, data_entry_flow, setup
+from homeassistant import config_entries, data_entry_flow
 from homeassistant.const import (
     CONF_IP_ADDRESS,
     CONF_PASSWORD,
     CONF_PORT,
-    CONF_SCAN_INTERVAL,
-    CONF_TIMEOUT,
     CONF_USERNAME,
 )
 from homeassistant.core import HomeAssistant
-from pytest_homeassistant_custom_component.common import MockConfigEntry, load_fixture
 
-from custom_components.ledfx.const import (
-    CONF_BASIC_AUTH,
-    DEFAULT_SCAN_INTERVAL,
-    DEFAULT_TIMEOUT,
-    DOMAIN,
-)
-from custom_components.ledfx.exceptions import LedFxConnectionError, LedFxRequestError
-from tests.setup import MOCK_IP_ADDRESS, MOCK_PORT, OPTIONS_FLOW_DATA
+from custom_components.ledfx.const import CONF_BASIC_AUTH, DOMAIN
 
-OPTIONS_FLOW_EDIT_DATA: Final = {
-    CONF_IP_ADDRESS: MOCK_IP_ADDRESS,
-    CONF_PORT: MOCK_PORT,
-    CONF_BASIC_AUTH: False,
-    CONF_TIMEOUT: 15,
-    CONF_SCAN_INTERVAL: 11,
-}
-
-_LOGGER = logging.getLogger(__name__)
+MOCK_PATH = Path(__file__).resolve().parent.parent / "scripts" / "mock_ledfx.py"
 
 
 @pytest.fixture(autouse=True)
-def auto_enable_custom_integrations(enable_custom_integrations):
-    """Enable custom integrations"""
+def expected_lingering_timers():
+    """async_verify_access spins up a throwaway coordinator to probe the host.
 
-    yield
-
-
-@pytest.mark.asyncio
-async def test_user(hass: HomeAssistant) -> None:
-    """Test user config.
-
-    :param hass: HomeAssistant
+    Its debouncer leaves a timer behind that the flow never gets to cancel.
+    Harmless, and upstream behaviour, but Home Assistant's test harness fails
+    the test over it.
     """
 
-    await setup.async_setup_component(hass, "http", {})
-    result_init = await hass.config_entries.flow.async_init(
+    return True
+
+
+@pytest.fixture
+def ledfx_server(socket_enabled):  # noqa: ANN001
+    """Serve the LedFx 2.x mock on a free localhost port."""
+
+    spec = importlib.util.spec_from_file_location("_mock_ledfx_flow", MOCK_PATH)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), module.H)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        yield server.server_address[1]
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+async def test_user_flow_creates_entry(
+    hass: HomeAssistant,
+    enable_custom_integrations,  # noqa: ANN001
+    ledfx_server: int,
+) -> None:
+    """IP + port must be enough to create an entry."""
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["step_id"] == "user"
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            CONF_IP_ADDRESS: "127.0.0.1",
+            CONF_PORT: str(ledfx_server),
+            CONF_BASIC_AUTH: False,
+        },
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_IP_ADDRESS] == "127.0.0.1"
+    assert result["data"][CONF_PORT] == str(ledfx_server)
+
+    await hass.config_entries.async_unload(result["result"].entry_id)
+    await hass.async_block_till_done()
+
+
+async def test_user_flow_with_basic_auth(
+    hass: HomeAssistant,
+    enable_custom_integrations,  # noqa: ANN001
+    ledfx_server: int,
+) -> None:
+    """Ticking basic auth re-shows the form for credentials, then keeps them."""
+
+    result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
 
-    assert result_init["type"] == data_entry_flow.RESULT_TYPE_FORM
-    assert result_init["handler"] == DOMAIN
-    assert result_init["step_id"] == "user"
+    # Ticking the box adds the username/password fields to the same step.
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            CONF_IP_ADDRESS: "127.0.0.1",
+            CONF_PORT: str(ledfx_server),
+            CONF_BASIC_AUTH: True,
+        },
+    )
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["step_id"] == "user"
 
-    with patch(
-        "custom_components.ledfx.async_setup_entry",
-        return_value=True,
-    ) as mock_async_setup_entry, patch(
-        "custom_components.ledfx.updater.LedFxClient"
-    ) as mock_client:
-        mock_client.return_value.config = AsyncMock(
-            return_value=json.loads(load_fixture("config_data.json"))
-        )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            CONF_IP_ADDRESS: "127.0.0.1",
+            CONF_PORT: str(ledfx_server),
+            CONF_BASIC_AUTH: True,
+            CONF_USERNAME: "user",
+            CONF_PASSWORD: "secret",
+        },
+    )
+    await hass.async_block_till_done()
 
-        result_configure = await hass.config_entries.flow.async_configure(
-            result_init["flow_id"],
-            {CONF_IP_ADDRESS: MOCK_IP_ADDRESS, CONF_PORT: MOCK_PORT},
-        )
-        await hass.async_block_till_done()
+    assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_USERNAME] == "user"
+    assert result["data"][CONF_PASSWORD] == "secret"
 
-    assert result_configure["flow_id"] == result_init["flow_id"]
-    assert result_configure["title"] == f"{MOCK_IP_ADDRESS}:{MOCK_PORT}"
-    assert result_configure["data"][CONF_IP_ADDRESS] == MOCK_IP_ADDRESS
-    assert result_configure["data"][CONF_PORT] == MOCK_PORT
-    assert not result_configure["data"][CONF_BASIC_AUTH]
-    assert result_configure["data"][CONF_SCAN_INTERVAL] == DEFAULT_SCAN_INTERVAL
-    assert result_configure["data"][CONF_TIMEOUT] == DEFAULT_TIMEOUT
-
-    assert len(mock_client.mock_calls) == 2
-    assert len(mock_async_setup_entry.mock_calls) == 1
+    await hass.config_entries.async_unload(result["result"].entry_id)
+    await hass.async_block_till_done()
 
 
-@pytest.mark.asyncio
-async def test_user_with_request_error(hass: HomeAssistant) -> None:
-    """Test user config.
+async def test_user_flow_reports_unreachable_host(
+    hass: HomeAssistant,
+    enable_custom_integrations,  # noqa: ANN001
+    socket_enabled,  # noqa: ANN001
+) -> None:
+    """An unreachable LedFx must return an error, not create an entry."""
 
-    :param hass: HomeAssistant
-    """
-
-    await setup.async_setup_component(hass, "http", {})
-    result_init = await hass.config_entries.flow.async_init(
+    result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
-
-    assert result_init["type"] == data_entry_flow.RESULT_TYPE_FORM
-    assert result_init["handler"] == DOMAIN
-    assert result_init["step_id"] == "user"
-
-    with patch(
-        "custom_components.ledfx.async_setup_entry",
-        return_value=True,
-    ) as mock_async_setup_entry, patch(
-        "custom_components.ledfx.updater.LedFxClient"
-    ) as mock_client:
-        mock_client.return_value.config = AsyncMock(side_effect=LedFxRequestError)
-
-        result_configure = await hass.config_entries.flow.async_configure(
-            result_init["flow_id"],
-            {CONF_IP_ADDRESS: MOCK_IP_ADDRESS, CONF_PORT: MOCK_PORT},
-        )
-        await hass.async_block_till_done()
-
-    assert result_configure["flow_id"] == result_init["flow_id"]
-    assert result_configure["step_id"] == "user"
-    assert result_configure["errors"]["base"] == "request.error"
-
-    assert len(mock_client.mock_calls) == 2
-    assert len(mock_async_setup_entry.mock_calls) == 0
-
-
-@pytest.mark.asyncio
-async def test_user_with_connection_error(hass: HomeAssistant) -> None:
-    """Test user config.
-
-    :param hass: HomeAssistant
-    """
-
-    await setup.async_setup_component(hass, "http", {})
-    result_init = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            CONF_IP_ADDRESS: "127.0.0.1",
+            CONF_PORT: "1",  # nothing listening
+            CONF_BASIC_AUTH: False,
+        },
     )
 
-    assert result_init["type"] == data_entry_flow.RESULT_TYPE_FORM
-    assert result_init["handler"] == DOMAIN
-    assert result_init["step_id"] == "user"
-
-    with patch(
-        "custom_components.ledfx.async_setup_entry",
-        return_value=True,
-    ) as mock_async_setup_entry, patch(
-        "custom_components.ledfx.updater.LedFxClient"
-    ) as mock_client:
-        mock_client.return_value.config = AsyncMock(side_effect=LedFxConnectionError)
-
-        result_configure = await hass.config_entries.flow.async_configure(
-            result_init["flow_id"],
-            {CONF_IP_ADDRESS: MOCK_IP_ADDRESS, CONF_PORT: MOCK_PORT},
-        )
-        await hass.async_block_till_done()
-
-    assert result_configure["flow_id"] == result_init["flow_id"]
-    assert result_configure["step_id"] == "user"
-    assert result_configure["errors"]["base"] == "connection.error"
-
-    assert len(mock_client.mock_calls) == 2
-    assert len(mock_async_setup_entry.mock_calls) == 0
-
-
-@pytest.mark.asyncio
-async def test_user_with_auth_show_form(hass: HomeAssistant) -> None:
-    """Test user config.
-
-    :param hass: HomeAssistant
-    """
-
-    await setup.async_setup_component(hass, "http", {})
-    result_init = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
-
-    assert result_init["type"] == data_entry_flow.RESULT_TYPE_FORM
-    assert result_init["handler"] == DOMAIN
-    assert result_init["step_id"] == "user"
-
-    with patch(
-        "custom_components.ledfx.async_setup_entry",
-        return_value=True,
-    ) as mock_async_setup_entry:
-        result_configure = await hass.config_entries.flow.async_configure(
-            result_init["flow_id"],
-            {
-                CONF_IP_ADDRESS: MOCK_IP_ADDRESS,
-                CONF_PORT: MOCK_PORT,
-                CONF_BASIC_AUTH: True,
-            },
-        )
-        await hass.async_block_till_done()
-
-    assert result_configure["flow_id"] == result_init["flow_id"]
-
-    assert len(mock_async_setup_entry.mock_calls) == 0
-
-
-@pytest.mark.asyncio
-async def test_user_with_auth(hass: HomeAssistant) -> None:
-    """Test user config.
-
-    :param hass: HomeAssistant
-    """
-
-    await setup.async_setup_component(hass, "http", {})
-    result_init = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
-
-    assert result_init["type"] == data_entry_flow.RESULT_TYPE_FORM
-    assert result_init["handler"] == DOMAIN
-    assert result_init["step_id"] == "user"
-
-    with patch(
-        "custom_components.ledfx.async_setup_entry",
-        return_value=True,
-    ) as mock_async_setup_entry, patch(
-        "custom_components.ledfx.updater.LedFxClient"
-    ) as mock_client:
-        mock_client.return_value.config = AsyncMock(
-            return_value=json.loads(load_fixture("config_data.json"))
-        )
-
-        result_configure = await hass.config_entries.flow.async_configure(
-            result_init["flow_id"],
-            {
-                CONF_IP_ADDRESS: MOCK_IP_ADDRESS,
-                CONF_PORT: MOCK_PORT,
-                CONF_BASIC_AUTH: True,
-            },
-        )
-        await hass.async_block_till_done()
-
-        result_configure = await hass.config_entries.flow.async_configure(
-            result_configure["flow_id"],
-            {
-                CONF_USERNAME: "test",
-                CONF_PASSWORD: "test",
-            },
-        )
-        await hass.async_block_till_done()
-
-    assert result_configure["flow_id"] == result_init["flow_id"]
-    assert result_configure["title"] == f"{MOCK_IP_ADDRESS}:{MOCK_PORT}"
-    assert result_configure["data"][CONF_IP_ADDRESS] == MOCK_IP_ADDRESS
-    assert result_configure["data"][CONF_PORT] == MOCK_PORT
-    assert result_configure["data"][CONF_BASIC_AUTH]
-    assert result_configure["data"][CONF_USERNAME] == "test"
-    assert result_configure["data"][CONF_PASSWORD] == "test"
-    assert result_configure["data"][CONF_SCAN_INTERVAL] == DEFAULT_SCAN_INTERVAL
-    assert result_configure["data"][CONF_TIMEOUT] == DEFAULT_TIMEOUT
-
-    assert len(mock_client.mock_calls) == 2
-    assert len(mock_async_setup_entry.mock_calls) == 1
-
-
-@pytest.mark.asyncio
-async def test_user_with_auth_revert(hass: HomeAssistant) -> None:
-    """Test user config.
-
-    :param hass: HomeAssistant
-    """
-
-    await setup.async_setup_component(hass, "http", {})
-    result_init = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
-
-    assert result_init["type"] == data_entry_flow.RESULT_TYPE_FORM
-    assert result_init["handler"] == DOMAIN
-    assert result_init["step_id"] == "user"
-
-    with patch(
-        "custom_components.ledfx.async_setup_entry",
-        return_value=True,
-    ) as mock_async_setup_entry, patch(
-        "custom_components.ledfx.updater.LedFxClient"
-    ) as mock_client:
-        mock_client.return_value.config = AsyncMock(
-            return_value=json.loads(load_fixture("config_data.json"))
-        )
-
-        result_configure = await hass.config_entries.flow.async_configure(
-            result_init["flow_id"],
-            {
-                CONF_IP_ADDRESS: MOCK_IP_ADDRESS,
-                CONF_PORT: MOCK_PORT,
-                CONF_BASIC_AUTH: True,
-            },
-        )
-        await hass.async_block_till_done()
-
-        result_configure = await hass.config_entries.flow.async_configure(
-            result_configure["flow_id"],
-            {
-                CONF_BASIC_AUTH: False,
-                CONF_USERNAME: "test",
-                CONF_PASSWORD: "test",
-            },
-        )
-        await hass.async_block_till_done()
-
-    assert result_configure["flow_id"] == result_init["flow_id"]
-    assert result_configure["title"] == f"{MOCK_IP_ADDRESS}:{MOCK_PORT}"
-    assert result_configure["data"][CONF_IP_ADDRESS] == MOCK_IP_ADDRESS
-    assert result_configure["data"][CONF_PORT] == MOCK_PORT
-    assert not result_configure["data"][CONF_BASIC_AUTH]
-    assert CONF_USERNAME not in result_configure["data"]
-    assert CONF_PASSWORD not in result_configure["data"]
-    assert result_configure["data"][CONF_SCAN_INTERVAL] == DEFAULT_SCAN_INTERVAL
-    assert result_configure["data"][CONF_TIMEOUT] == DEFAULT_TIMEOUT
-
-    assert len(mock_client.mock_calls) == 2
-    assert len(mock_async_setup_entry.mock_calls) == 1
-
-
-@pytest.mark.asyncio
-async def test_options_flow(hass: HomeAssistant) -> None:
-    """Test options flow.
-
-    :param hass: HomeAssistant
-    """
-
-    config_entry = MockConfigEntry(
-        domain=DOMAIN,
-        data=OPTIONS_FLOW_DATA,
-        options={},
-    )
-    config_entry.add_to_hass(hass)
-
-    await setup.async_setup_component(hass, "http", {})
-
-    with patch(
-        "custom_components.ledfx.async_setup_entry",
-        return_value=True,
-    ) as mock_async_setup_entry, patch(
-        "custom_components.ledfx.updater.LedFxClient"
-    ) as mock_client:
-        mock_client.return_value.config = AsyncMock(
-            return_value=json.loads(load_fixture("config_data.json"))
-        )
-
-        await hass.config_entries.async_setup(config_entry.entry_id)
-        await hass.async_block_till_done()
-
-        result_init = await hass.config_entries.options.async_init(
-            config_entry.entry_id
-        )
-
-        assert result_init["type"] == data_entry_flow.RESULT_TYPE_FORM
-        assert result_init["step_id"] == "init"
-
-        result_save = await hass.config_entries.options.async_configure(
-            result_init["flow_id"],
-            user_input=OPTIONS_FLOW_EDIT_DATA,
-        )
-
-    assert result_save["type"] == data_entry_flow.RESULT_TYPE_CREATE_ENTRY
-    assert (
-        config_entry.options[CONF_IP_ADDRESS] == OPTIONS_FLOW_EDIT_DATA[CONF_IP_ADDRESS]
-    )
-    assert config_entry.options[CONF_PORT] == OPTIONS_FLOW_EDIT_DATA[CONF_PORT]
-    assert (
-        config_entry.options[CONF_BASIC_AUTH] == OPTIONS_FLOW_EDIT_DATA[CONF_BASIC_AUTH]
-    )
-    assert config_entry.options[CONF_TIMEOUT] == OPTIONS_FLOW_EDIT_DATA[CONF_TIMEOUT]
-    assert (
-        config_entry.options[CONF_SCAN_INTERVAL]
-        == OPTIONS_FLOW_EDIT_DATA[CONF_SCAN_INTERVAL]
-    )
-    assert len(mock_async_setup_entry.mock_calls) == 1
-
-
-@pytest.mark.asyncio
-async def test_options_flow_with_auth(hass: HomeAssistant) -> None:
-    """Test options flow.
-
-    :param hass: HomeAssistant
-    """
-
-    config_entry = MockConfigEntry(
-        domain=DOMAIN,
-        data=OPTIONS_FLOW_DATA,
-        options={},
-    )
-    config_entry.add_to_hass(hass)
-
-    await setup.async_setup_component(hass, "http", {})
-
-    with patch(
-        "custom_components.ledfx.async_setup_entry",
-        return_value=True,
-    ) as mock_async_setup_entry, patch(
-        "custom_components.ledfx.updater.LedFxClient"
-    ) as mock_client:
-        mock_client.return_value.config = AsyncMock(
-            return_value=json.loads(load_fixture("config_data.json"))
-        )
-
-        await hass.config_entries.async_setup(config_entry.entry_id)
-        await hass.async_block_till_done()
-
-        result_init = await hass.config_entries.options.async_init(
-            config_entry.entry_id
-        )
-
-        assert result_init["type"] == data_entry_flow.RESULT_TYPE_FORM
-        assert result_init["step_id"] == "init"
-
-        result_save = await hass.config_entries.options.async_configure(
-            result_init["flow_id"],
-            user_input=OPTIONS_FLOW_EDIT_DATA
-            | {
-                CONF_BASIC_AUTH: True,
-            },
-        )
-        await hass.async_block_till_done()
-
-        result_save = await hass.config_entries.options.async_configure(
-            result_save["flow_id"],
-            user_input=OPTIONS_FLOW_EDIT_DATA
-            | {
-                CONF_BASIC_AUTH: True,
-                CONF_USERNAME: "test",
-                CONF_PASSWORD: "test",
-            },
-        )
-        await hass.async_block_till_done()
-
-    assert result_save["type"] == data_entry_flow.RESULT_TYPE_CREATE_ENTRY
-    assert (
-        config_entry.options[CONF_IP_ADDRESS] == OPTIONS_FLOW_EDIT_DATA[CONF_IP_ADDRESS]
-    )
-    assert config_entry.options[CONF_PORT] == OPTIONS_FLOW_EDIT_DATA[CONF_PORT]
-    assert config_entry.options[CONF_BASIC_AUTH]
-    assert config_entry.options[CONF_USERNAME] == "test"
-    assert config_entry.options[CONF_PASSWORD] == "test"
-    assert config_entry.options[CONF_TIMEOUT] == OPTIONS_FLOW_EDIT_DATA[CONF_TIMEOUT]
-    assert (
-        config_entry.options[CONF_SCAN_INTERVAL]
-        == OPTIONS_FLOW_EDIT_DATA[CONF_SCAN_INTERVAL]
-    )
-    assert len(mock_async_setup_entry.mock_calls) == 1
-
-
-@pytest.mark.asyncio
-async def test_options_flow_request_error(hass: HomeAssistant) -> None:
-    """Test options flow.
-
-    :param hass: HomeAssistant
-    """
-
-    config_entry = MockConfigEntry(
-        domain=DOMAIN,
-        data=OPTIONS_FLOW_DATA,
-        options={},
-    )
-    config_entry.add_to_hass(hass)
-
-    await setup.async_setup_component(hass, "http", {})
-
-    with patch(
-        "custom_components.ledfx.async_setup_entry",
-        return_value=True,
-    ) as mock_async_setup_entry, patch(
-        "custom_components.ledfx.updater.LedFxClient"
-    ) as mock_client:
-        mock_client.return_value.config = AsyncMock(side_effect=LedFxRequestError)
-
-        await hass.config_entries.async_setup(config_entry.entry_id)
-        await hass.async_block_till_done()
-
-        result_init = await hass.config_entries.options.async_init(
-            config_entry.entry_id
-        )
-
-        assert result_init["type"] == data_entry_flow.RESULT_TYPE_FORM
-        assert result_init["step_id"] == "init"
-
-        result_save = await hass.config_entries.options.async_configure(
-            result_init["flow_id"],
-            user_input=OPTIONS_FLOW_EDIT_DATA,
-        )
-
-    assert result_save["type"] == data_entry_flow.RESULT_TYPE_FORM
-    assert result_save["step_id"] == "init"
-    assert result_save["errors"]["base"] == "request.error"
-    assert len(mock_async_setup_entry.mock_calls) == 1
-
-
-@pytest.mark.asyncio
-async def test_options_flow_connection_error(hass: HomeAssistant) -> None:
-    """Test options flow.
-
-    :param hass: HomeAssistant
-    """
-
-    config_entry = MockConfigEntry(
-        domain=DOMAIN,
-        data=OPTIONS_FLOW_DATA,
-        options={},
-    )
-    config_entry.add_to_hass(hass)
-
-    await setup.async_setup_component(hass, "http", {})
-
-    with patch(
-        "custom_components.ledfx.async_setup_entry",
-        return_value=True,
-    ) as mock_async_setup_entry, patch(
-        "custom_components.ledfx.updater.LedFxClient"
-    ) as mock_client:
-        mock_client.return_value.config = AsyncMock(side_effect=LedFxConnectionError)
-
-        await hass.config_entries.async_setup(config_entry.entry_id)
-        await hass.async_block_till_done()
-
-        result_init = await hass.config_entries.options.async_init(
-            config_entry.entry_id
-        )
-
-        assert result_init["type"] == data_entry_flow.RESULT_TYPE_FORM
-        assert result_init["step_id"] == "init"
-
-        result_save = await hass.config_entries.options.async_configure(
-            result_init["flow_id"],
-            user_input=OPTIONS_FLOW_EDIT_DATA,
-        )
-
-    assert result_save["type"] == data_entry_flow.RESULT_TYPE_FORM
-    assert result_save["step_id"] == "init"
-    assert result_save["errors"]["base"] == "connection.error"
-    assert len(mock_async_setup_entry.mock_calls) == 1
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["errors"]

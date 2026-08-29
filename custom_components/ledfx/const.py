@@ -16,8 +16,6 @@ PLATFORMS: Final = [
     Platform.SENSOR,
     Platform.LIGHT,
     Platform.BUTTON,
-    Platform.SWITCH,
-    Platform.NUMBER,
     Platform.SELECT,
 ]
 
@@ -32,10 +30,7 @@ UPDATE_LISTENER: Final = "update_listener"
 STOP_LISTENER: Final = "stop_listener"
 SIGNAL_NEW_BUTTON: Final = f"{DOMAIN}-new-button"
 SIGNAL_NEW_DEVICE: Final = f"{DOMAIN}-new-device"
-SIGNAL_NEW_NUMBER: Final = f"{DOMAIN}-new-number"
-SIGNAL_NEW_SELECT: Final = f"{DOMAIN}-new-select"
 SIGNAL_NEW_SENSOR: Final = f"{DOMAIN}-new-sensor"
-SIGNAL_NEW_SWITCH: Final = f"{DOMAIN}-new-switch"
 OPTION_IS_FROM_FLOW: Final = "is_from_flow"
 
 """Custom conf"""
@@ -56,10 +51,6 @@ ATTR_STATE: Final = "state"
 ATTR_STATE_NAME: Final = "State"
 ATTR_DEVICE: Final = "device"
 ATTR_DEVICE_SW_VERSION: Final = "device_sw_version"
-ATTR_FIELD: Final = "field"
-ATTR_FIELD_TYPE: Final = "type"
-ATTR_FIELD_EFFECTS: Final = "effects"
-ATTR_FIELD_OPTIONS: Final = "options"
 
 """Select attributes"""
 ATTR_SELECT_AUDIO_INPUT: Final = "audio_input"
