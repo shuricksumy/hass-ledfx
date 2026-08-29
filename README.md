@@ -6,7 +6,39 @@
 Component for deep integration [LedFx](https://github.com/LedFx/LedFx) from [Home Assistant](https://www.home-assistant.io/).
 
 ## Requirements
-* LedFx version >= [0.10.7](https://github.com/LedFx/LedFx/releases/tag/v0.10.7)
+* LedFx version >= [2.0.0](https://github.com/LedFx/LedFx/releases) (verified against [v2.1.9](https://github.com/LedFx/LedFx/releases/tag/v2.1.9))
+
+Older LedFx 0.10.x instances are still discovered and reported, but effect
+control now targets the `virtuals` API only — LedFx 2.x removed effects and
+presets from devices entirely.
+
+## Verifying against your LedFx
+
+`scripts/ledfx_api_check.py` runs the integration's own REST client against a
+LedFx instance, so you can confirm the API contract without Home Assistant. It
+needs nothing but `httpx`.
+
+```bash
+# read-only: every GET the coordinator depends on
+python3 scripts/ledfx_api_check.py --host 192.168.1.50 --port 8888
+
+# also exercise turn-on / brightness / preset / turn-off (changes your lights,
+# then restores the previous effect)
+python3 scripts/ledfx_api_check.py --host 192.168.1.50 --port 8888 --write my-virtual
+```
+
+To check offline, run the bundled strict mock of the LedFx 2.1.9 API instead:
+
+```bash
+python3 scripts/mock_ledfx.py 8899 &
+python3 scripts/ledfx_api_check.py --host 127.0.0.1 --port 8899 --write my-strip
+```
+
+The request-shape regression tests need no Home Assistant either:
+
+```bash
+python3 -m pytest tests/test_client_ledfx2.py -q
+```
 
 ## Important information
 * ❗ Effect controls (number, switch, select) are disabled by default. They must be enabled manually.

@@ -131,7 +131,6 @@ class LedFxEntity(CoordinatorEntity):
                 self._attr_device_code,
                 effect,
                 self._convert_config(config, code, value),
-                self._updater.version == Version.V2,
             )
 
             self._updater.data[

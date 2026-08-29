@@ -11,11 +11,9 @@ from homeassistant.components.light import (
     ATTR_EFFECT,
     ATTR_RGBW_COLOR,
     ENTITY_ID_FORMAT,
-    SUPPORT_BRIGHTNESS,
-    SUPPORT_COLOR,
-    SUPPORT_EFFECT,
     ColorMode,
     LightEntity,
+    LightEntityFeature,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_OFF, STATE_ON
@@ -118,12 +116,16 @@ class LedFxLight(LedFxEntity, LightEntity):
 
         self._attr_device_info = entity.device_info
 
-        self._attr_supported_features = SUPPORT_EFFECT | SUPPORT_BRIGHTNESS
+        self._attr_supported_features = LightEntityFeature.EFFECT
 
+        # Brightness and color are declared through color modes; ColorMode.RGBW
+        # already implies brightness support.
         if updater.version == Version.V2:
-            self._attr_supported_features |= SUPPORT_COLOR
-            self._attr_supported_color_modes = {ColorMode.RGBW, ColorMode.ONOFF}
+            self._attr_supported_color_modes = {ColorMode.RGBW}
             self._attr_color_mode = ColorMode.RGBW
+        else:
+            self._attr_supported_color_modes = {ColorMode.BRIGHTNESS}
+            self._attr_color_mode = ColorMode.BRIGHTNESS
 
         self._attr_is_on = updater.data.get(
             f"{self._attr_device_code}_{ATTR_LIGHT_STATE}", False
@@ -210,7 +212,6 @@ class LedFxLight(LedFxEntity, LightEntity):
         :param kwargs: Any: Any arguments
         """
 
-        is_virtual: bool = self._updater.version == Version.V2
         preset: str | None = None
         old_effect: str | None = self._attr_effect
         category: EffectCategory = EffectCategory.NONE
@@ -233,13 +234,11 @@ class LedFxLight(LedFxEntity, LightEntity):
                     category.value,
                     self._attr_effect,  # type: ignore
                     preset,  # type: ignore
-                    is_virtual,
                 )
                 if category != EffectCategory.NONE and preset is not None
                 else await self._updater.client.device_on(
                     self._attr_device_code,  # type: ignore
                     self._attr_effect,  # type: ignore
-                    is_virtual,
                 )
             )
 
@@ -280,7 +279,7 @@ class LedFxLight(LedFxEntity, LightEntity):
         """
 
         await self._updater.client.device_off(
-            self._attr_device_code, self._updater.version == Version.V2  # type: ignore
+            self._attr_device_code  # type: ignore
         )
 
     async def async_turn_on(self, **kwargs: Any) -> None:

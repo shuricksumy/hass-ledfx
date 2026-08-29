@@ -198,79 +198,85 @@ class LedFxClient:
 
         return await self.request("colors", validate_field="colors")
 
-    async def device_on(
-        self, device_code: str, effect: str, is_virtual: bool = False
-    ) -> dict:
-        """devices/effects on method.
+    async def device_on(self, virtual_id: str, effect: str) -> dict:
+        """virtuals/effects on method.
 
-        :param device_code: str: device code
+        Omitting ``config`` makes LedFx restore the config it has stored for
+        this effect on this virtual, instead of resetting it to defaults.
+
+        :param virtual_id: str: virtual code
         :param effect: str: effect code
-        :param is_virtual: bool: Is virtual device
         :return dict: dict with api data.
         """
-
-        prefix: str = "virtuals" if is_virtual else "devices"
 
         return await self.request(
-            f"{prefix}/{device_code}/effects",
+            f"virtuals/{virtual_id}/effects",
             Method.POST,
-            {"config": {"active": True}, "type": effect},
+            {"type": effect},
         )
 
-    async def device_off(self, device_code: str, is_virtual: bool = False) -> dict:
-        """devices/effects off method.
+    async def device_off(self, virtual_id: str) -> dict:
+        """virtuals/effects off method.
 
-        :param device_code: str: device code
-        :param is_virtual: bool: Is virtual device
+        Clears the active effect of the virtual. The effect config is kept in
+        the virtual's backing store, so device_on can restore it later.
+
+        :param virtual_id: str: virtual code
         :return dict: dict with api data.
         """
 
-        prefix: str = "virtuals" if is_virtual else "devices"
+        return await self.request(f"virtuals/{virtual_id}/effects", Method.DELETE)
 
-        return await self.request(f"{prefix}/{device_code}/effects", Method.DELETE)
+    async def delete_effect(self, virtual_id: str, effect: str) -> dict:
+        """virtuals/effects/delete method.
+
+        Clears the active effect *and* drops the stored config for ``effect``
+        from the virtual's effect history.
+
+        :param virtual_id: str: virtual code
+        :param effect: str: effect code
+        :return dict: dict with api data.
+        """
+
+        return await self.request(
+            f"virtuals/{virtual_id}/effects/delete",
+            Method.POST,
+            {"type": effect},
+        )
 
     async def preset(
         self,
-        device_code: str,
+        virtual_id: str,
         category: str,
         effect: str,
         preset: str,
-        is_virtual: bool = False,
     ) -> dict:
-        """devices/presets on method.
+        """virtuals/presets on method.
 
-        :param device_code: str: device code
-        :param category: str: preset category
+        :param virtual_id: str: virtual code
+        :param category: str: preset category (ledfx_presets or user_presets)
         :param effect: str: effect code
         :param preset: str: preset code
-        :param is_virtual: bool: Is virtual device
         :return dict: dict with api data.
         """
 
-        prefix: str = "virtuals" if is_virtual else "devices"
-
         return await self.request(
-            f"{prefix}/{device_code}/presets",
+            f"virtuals/{virtual_id}/presets",
             Method.PUT,
             {"category": category, "effect_id": effect, "preset_id": preset},
         )
 
-    async def effect(
-        self, device_code: str, effect: str, config: dict, is_virtual: bool = False
-    ) -> dict:
-        """devices/effects update method.
+    async def effect(self, virtual_id: str, effect: str, config: dict) -> dict:
+        """virtuals/effects update method.
 
-        :param device_code: str: device code
+        :param virtual_id: str: virtual code
         :param effect: str: effect code
         :param config: dict: effect config
-        :param is_virtual: bool: Is virtual device
         :return dict: dict with api data.
         """
 
-        prefix: str = "virtuals" if is_virtual else "devices"
-
         return await self.request(
-            f"{prefix}/{device_code}/effects",
+            f"virtuals/{virtual_id}/effects",
             Method.PUT,
             {"config": config, "type": effect},
         )
@@ -288,7 +294,9 @@ class LedFxClient:
                 "config", Method.PUT, {"audio": {"audio_device": index}}
             )
 
-        return await self.request("audio/devices", Method.PUT, {"index": index})
+        return await self.request(
+            "audio/devices", Method.PUT, {"audio_device": index}
+        )
 
     async def run_scene(self, scene_id: str) -> dict:
         """scenes run method.

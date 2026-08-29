@@ -33,5 +33,5 @@ class EffectCategory(str, Enum):
     """EffectCategory enum"""
 
     NONE = "none"
-    DEFAULT = "default_presets"
-    CUSTOM = "custom_presets"
+    DEFAULT = "ledfx_presets"
+    CUSTOM = "user_presets"
