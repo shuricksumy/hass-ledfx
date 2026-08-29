@@ -3,6 +3,6 @@
 pytest-homeassistant-custom-component
 
 # Linting and formatting; pinned loosely so CI matches local runs.
-ruff>=0.16
+ruff>=0.16.4
 
 pytest-cov
