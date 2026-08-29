@@ -34,7 +34,7 @@ SIGNAL_NEW_SELECT: Final = f"{DOMAIN}-new-select"
 SIGNAL_NEW_SENSOR: Final = f"{DOMAIN}-new-sensor"
 # Bumped when a release needs to purge registry rows it no longer creates.
 OPTION_CLEANUP_VERSION: Final = "cleanup_version"
-CLEANUP_VERSION: Final = 1
+CLEANUP_VERSION: Final = 2
 
 OPTION_IS_FROM_FLOW: Final = "is_from_flow"
 
@@ -59,8 +59,13 @@ ATTR_DEVICE_SW_VERSION: Final = "device_sw_version"
 
 """Select attributes"""
 ATTR_SELECT_AUDIO_INPUT: Final = "audio_input"
-ATTR_SELECT_GRADIENT: Final = "gradient"
-ATTR_SELECT_GRADIENT_NAME: Final = "Color pattern"
+# The LedFx effect config key.
+ATTR_EFFECT_GRADIENT: Final = "gradient"
+# The entity key. Deliberately not "gradient": up to 3.1.0 a per-effect select
+# used "{entry}-{code}-gradient" and shipped disabled, and Home Assistant
+# restores a removed entity's disabled state when the same unique id returns.
+ATTR_SELECT_COLOR_PATTERN: Final = "color_pattern"
+ATTR_SELECT_COLOR_PATTERN_NAME: Final = "Color pattern"
 ATTR_SELECT_AUDIO_INPUT_NAME: Final = "Audio input"
 ATTR_SELECT_AUDIO_INPUT_OPTIONS: Final = "audio_input_options"
 

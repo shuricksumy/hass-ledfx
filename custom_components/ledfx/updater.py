@@ -37,7 +37,7 @@ from .const import (
     ATTR_LIGHT_PRESET,
     ATTR_LIGHT_STATE,
     ATTR_SELECT_AUDIO_INPUT,
-    ATTR_SELECT_GRADIENT,
+    ATTR_EFFECT_GRADIENT,
     ATTR_SELECT_AUDIO_INPUT_OPTIONS,
     ATTR_STATE,
     DEFAULT_SCAN_INTERVAL,
@@ -322,7 +322,7 @@ class LedFxUpdater(DataUpdateCoordinator):
                     # 42 of 63 effects expose a "gradient" key; the rest of the
                     # color keys appear in a handful of effects each and get no
                     # entity of their own.
-                    if code == ATTR_SELECT_GRADIENT:
+                    if code == ATTR_EFFECT_GRADIENT:
                         self.gradient_effects.add(effect)
 
         if (

@@ -24,8 +24,9 @@ from .const import (
     ATTR_SELECT_AUDIO_INPUT,
     ATTR_SELECT_AUDIO_INPUT_NAME,
     ATTR_SELECT_AUDIO_INPUT_OPTIONS,
-    ATTR_SELECT_GRADIENT,
-    ATTR_SELECT_GRADIENT_NAME,
+    ATTR_EFFECT_GRADIENT,
+    ATTR_SELECT_COLOR_PATTERN,
+    ATTR_SELECT_COLOR_PATTERN_NAME,
     ATTR_STATE,
     SIGNAL_NEW_DEVICE,
 )
@@ -100,7 +101,7 @@ async def async_setup_entry(
             [
                 LedFxGradientSelect(
                     f"{config_entry.entry_id}-{entity.description.key}"
-                    f"-{ATTR_SELECT_GRADIENT}",
+                    f"-{ATTR_SELECT_COLOR_PATTERN}",
                     entity,
                     updater,
                 )
@@ -213,8 +214,8 @@ class LedFxSelect(LedFxEntity, SelectEntity):
 
 
 GRADIENT_DESCRIPTION: Final = SelectEntityDescription(
-    key=ATTR_SELECT_GRADIENT,
-    name=ATTR_SELECT_GRADIENT_NAME,
+    key=ATTR_SELECT_COLOR_PATTERN,
+    name=ATTR_SELECT_COLOR_PATTERN_NAME,
     icon="mdi:gradient-horizontal",
     entity_category=EntityCategory.CONFIG,
     entity_registry_enabled_default=True,
@@ -252,7 +253,7 @@ class LedFxGradientSelect(LedFxEntity, SelectEntity):
         self.entity_id = generate_entity_id(
             ENTITY_ID_FORMAT,
             updater.ip,
-            f"{self._attr_device_code}_{ATTR_SELECT_GRADIENT}",
+            f"{self._attr_device_code}_{ATTR_SELECT_COLOR_PATTERN}",
         )
 
         self._attr_options = self._build_options()
@@ -275,7 +276,7 @@ class LedFxGradientSelect(LedFxEntity, SelectEntity):
 
         return self._updater.data.get(
             f"{self._attr_device_code}_{ATTR_LIGHT_EFFECT_CONFIG}", {}
-        ).get(ATTR_SELECT_GRADIENT)
+        ).get(ATTR_EFFECT_GRADIENT)
 
     def _is_available(self) -> bool:
         """Only 42 of 63 effects have a gradient, and only while switched on.
@@ -318,7 +319,7 @@ class LedFxGradientSelect(LedFxEntity, SelectEntity):
         :param option: str: Option
         """
 
-        await self.async_update_effect(ATTR_SELECT_GRADIENT, option)
+        await self.async_update_effect(ATTR_EFFECT_GRADIENT, option)
 
         self._attr_current_option = option
         self.async_write_ha_state()

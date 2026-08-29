@@ -19,6 +19,7 @@ from homeassistant.helpers import entity_registry as er
 
 from .const import (
     ATTR_SELECT_AUDIO_INPUT,
+    ATTR_SELECT_COLOR_PATTERN,
     CLEANUP_VERSION,
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_TIMEOUT,
@@ -127,6 +128,7 @@ def _async_remove_stale_entities(hass: HomeAssistant, entry: ConfigEntry) -> Non
         or (
             entity.domain == "select"
             and entity.unique_id != f"{entry.entry_id}-{ATTR_SELECT_AUDIO_INPUT}"
+            and not entity.unique_id.endswith(f"-{ATTR_SELECT_COLOR_PATTERN}")
         )
     ]
 

@@ -281,7 +281,7 @@ async def test_every_platform_action_dispatches(
     # select -> the audio input, plus one color pattern select per virtual
     selects = [e.entity_id for e in entities if e.domain == "select"]
     audio = [e for e in selects if e.endswith("audio_input")]
-    gradients = [e for e in selects if e.endswith("_gradient")]
+    gradients = [e for e in selects if e.endswith("_color_pattern")]
     assert len(audio) == 1, f"expected one audio input select, got {audio}"
     assert gradients, "no color pattern selects were built"
     audio_id = audio[0]
@@ -297,7 +297,7 @@ async def test_every_platform_action_dispatches(
     assert hass.states.get(audio_id).state == options[-1]
 
 
-async def test_gradient_select(hass: HomeAssistant, setup_entry) -> None:  # noqa: ANN001
+async def test_color_pattern_select(hass: HomeAssistant, setup_entry) -> None:  # noqa: ANN001
     """The color pattern select applies a gradient to the active effect.
 
     One entity per virtual rather than one per effect setting: "gradient" is
@@ -309,7 +309,9 @@ async def test_gradient_select(hass: HomeAssistant, setup_entry) -> None:  # noq
     updater = hass.data[DOMAIN][setup_entry.entry_id][UPDATER]
 
     gradient_id = next(
-        e for e in hass.states.async_entity_ids("select") if e.endswith("_gradient")
+        e
+        for e in hass.states.async_entity_ids("select")
+        if e.endswith("_color_pattern")
     )
 
     # Unavailable while the light is off.
@@ -351,3 +353,61 @@ async def test_gradient_select(hass: HomeAssistant, setup_entry) -> None:  # noq
     await updater.async_refresh()
     await hass.async_block_till_done()
     assert hass.states.get(gradient_id).state == "Ocean"
+
+
+async def test_color_pattern_not_adopted_from_old_disabled_entity(
+    hass: HomeAssistant,
+    enable_custom_integrations,  # noqa: ANN001
+    ledfx_server: int,
+) -> None:
+    """A pre-3.2.0 per-effect select must not leave the new one disabled.
+
+    Those selects were keyed "{entry}-{code}-gradient" and shipped disabled.
+    Home Assistant restores a removed entity's disabled state when the same
+    unique id comes back, so reusing that id silently disabled the new entity
+    even though it declares enabled_default. The color pattern select uses
+    "-color_pattern" and cannot collide.
+    """
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            CONF_IP_ADDRESS: "127.0.0.1",
+            CONF_PORT: str(ledfx_server),
+            CONF_BASIC_AUTH: False,
+            CONF_TIMEOUT: 10,
+            CONF_SCAN_INTERVAL: DEFAULT_SCAN_INTERVAL,
+        },
+        options={},  # no cleanup flag: the upgrade path
+    )
+    entry.add_to_hass(hass)
+
+    registry = er.async_get(hass)
+    registry.async_get_or_create(
+        "select",
+        DOMAIN,
+        f"{entry.entry_id}-my-strip-gradient",
+        suggested_object_id="ledfx_127_0_0_1_my_strip_gradient",
+        config_entry=entry,
+        disabled_by=er.RegistryEntryDisabler.INTEGRATION,
+    )
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    created = [
+        e
+        for e in er.async_entries_for_config_entry(registry, entry.entry_id)
+        if e.entity_id.endswith("_color_pattern")
+    ]
+    assert created, "no color pattern select was created"
+    assert all(e.disabled_by is None for e in created), (
+        f"color pattern select came back disabled: {created}"
+    )
+
+    # The stale per-effect select is cleared out rather than left behind.
+    assert not [
+        e
+        for e in er.async_entries_for_config_entry(registry, entry.entry_id)
+        if e.unique_id.endswith("-gradient")
+    ]

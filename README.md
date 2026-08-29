@@ -45,7 +45,7 @@ For a LedFx at `192.168.1.50`, entity IDs look like this:
 | --- | --- | --- |
 | Light (one per virtual) | `light.ledfx_192_168_1_50_matrix` | On/off, brightness, colour, effect and preset selection |
 | | `light.ledfx_192_168_1_50_wled_144_l` | Entity IDs use the LedFx **virtual id**, not its display name |
-| Colour pattern (one per virtual) | `select.ledfx_192_168_1_50_matrix_gradient` | Gradient or solid colour for the active effect |
+| Colour pattern (one per virtual) | `select.ledfx_192_168_1_50_matrix_color_pattern` | Gradient or solid colour for the active effect |
 | Audio input | `select.ledfx_192_168_1_50_audio_input` | Switches LedFx's audio source |
 | Scene | `button.ledfx_192_168_1_50_party` | Activates a LedFx scene |
 | Connection state | `binary_sensor.ledfx_192_168_1_50_state` | Whether LedFx is reachable |
@@ -196,7 +196,7 @@ type: entities
 title: Matrix
 entities:
   - entity: light.ledfx_192_168_1_50_matrix
-  - entity: select.ledfx_192_168_1_50_matrix_gradient
+  - entity: select.ledfx_192_168_1_50_matrix_color_pattern
     name: Colour pattern
 ```
 
@@ -217,7 +217,7 @@ automation:
           brightness_pct: 60
       - action: select.select_option
         target:
-          entity_id: select.ledfx_192_168_1_50_matrix_gradient
+          entity_id: select.ledfx_192_168_1_50_matrix_color_pattern
         data:
           option: Ocean
 ```
