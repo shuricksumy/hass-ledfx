@@ -278,11 +278,13 @@ async def test_every_platform_action_dispatches(
     )
     await hass.async_block_till_done()
 
-    # select -> audio input, the only select the integration still provides
-    selects = [e for e in entities if e.domain == "select"]
-    assert len(selects) == 1, f"expected only the audio input select, got {selects}"
-    audio_id = selects[0].entity_id
-    assert audio_id.endswith("audio_input")
+    # select -> the audio input, plus one color pattern select per virtual
+    selects = [e.entity_id for e in entities if e.domain == "select"]
+    audio = [e for e in selects if e.endswith("audio_input")]
+    gradients = [e for e in selects if e.endswith("_gradient")]
+    assert len(audio) == 1, f"expected one audio input select, got {audio}"
+    assert gradients, "no color pattern selects were built"
+    audio_id = audio[0]
 
     options = hass.states.get(audio_id).attributes["options"]
     await hass.services.async_call(
@@ -293,3 +295,59 @@ async def test_every_platform_action_dispatches(
     )
     await hass.async_block_till_done()
     assert hass.states.get(audio_id).state == options[-1]
+
+
+async def test_gradient_select(hass: HomeAssistant, setup_entry) -> None:  # noqa: ANN001
+    """The color pattern select applies a gradient to the active effect.
+
+    One entity per virtual rather than one per effect setting: "gradient" is
+    the only color key common enough to be worth an entity, and LedFx accepts
+    either a gradient or a solid color for it.
+    """
+
+    light_id = await _light_entity_id(hass)
+    updater = hass.data[DOMAIN][setup_entry.entry_id][UPDATER]
+
+    gradient_id = next(
+        e for e in hass.states.async_entity_ids("select") if e.endswith("_gradient")
+    )
+
+    # Unavailable while the light is off.
+    await hass.services.async_call(
+        LIGHT_DOMAIN, SERVICE_TURN_OFF, {ATTR_ENTITY_ID: light_id}, blocking=True
+    )
+    await hass.async_block_till_done()
+    await updater.async_refresh()
+    await hass.async_block_till_done()
+    assert hass.states.get(gradient_id).state == "unavailable"
+
+    await hass.services.async_call(
+        LIGHT_DOMAIN,
+        SERVICE_TURN_ON,
+        {ATTR_ENTITY_ID: light_id, "effect": "rainbow"},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    await updater.async_refresh()
+    await hass.async_block_till_done()
+
+    state = hass.states.get(gradient_id)
+    assert state.state != "unavailable", "gradient effect should expose the select"
+
+    options = state.attributes["options"]
+    assert "Ocean" in options, f"gradients missing from options: {options[:5]}"
+    assert "red" in options, "solid colors should be offered too"
+
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {ATTR_ENTITY_ID: gradient_id, "option": "Ocean"},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    assert hass.states.get(gradient_id).state == "Ocean"
+
+    # Survives a refresh: the value round-trips back to its name.
+    await updater.async_refresh()
+    await hass.async_block_till_done()
+    assert hass.states.get(gradient_id).state == "Ocean"

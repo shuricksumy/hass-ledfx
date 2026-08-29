@@ -37,6 +37,7 @@ from .const import (
     ATTR_LIGHT_PRESET,
     ATTR_LIGHT_STATE,
     ATTR_SELECT_AUDIO_INPUT,
+    ATTR_SELECT_GRADIENT,
     ATTR_SELECT_AUDIO_INPUT_OPTIONS,
     ATTR_STATE,
     DEFAULT_SCAN_INTERVAL,
@@ -76,6 +77,7 @@ class LedFxUpdater(DataUpdateCoordinator):
 
     new_button_callback: CALLBACK_TYPE | None = None
     new_device_callback: CALLBACK_TYPE | None = None
+    new_select_callback: CALLBACK_TYPE | None = None
     new_sensor_callback: CALLBACK_TYPE | None = None
 
     _scan_interval: int
@@ -133,9 +135,11 @@ class LedFxUpdater(DataUpdateCoordinator):
         self.sensors: dict[str, LedFxEntityDescription] = {}
 
         self.color_properties: set = set()
+        self.gradient_effects: set = set()
         self.presets: dict = {}
         self.colors: dict = {}
         self.gradients: dict = {}
+        self.color_names: dict = {}
 
         self._is_first_update: bool = True
 
@@ -145,6 +149,7 @@ class LedFxUpdater(DataUpdateCoordinator):
         callbacks: list = [
             self.new_button_callback,
             self.new_device_callback,
+            self.new_select_callback,
             self.new_sensor_callback,
         ]
 
@@ -156,6 +161,7 @@ class LedFxUpdater(DataUpdateCoordinator):
         # the same dispatchers twice.
         self.new_button_callback = None
         self.new_device_callback = None
+        self.new_select_callback = None
         self.new_sensor_callback = None
 
     @cached_property
@@ -286,6 +292,13 @@ class LedFxUpdater(DataUpdateCoordinator):
         self.colors = colors
         self.gradients = gradients
 
+        # Reverse lookup for showing a stored color value by its name. Colors
+        # win over gradients on the rare value that appears in both.
+        self.color_names = {
+            value: name
+            for name, value in list(gradients.items()) + list(colors.items())
+        }
+
     async def _async_prepare_schema(self, data: dict) -> None:
         """Prepare schema.
 
@@ -299,10 +312,18 @@ class LedFxUpdater(DataUpdateCoordinator):
 
             # Only the color-typed keys are needed, to show colors by name in
             # the light attributes and translate them back when writing.
-            for fields in response["effects"].values():
+            for effect, fields in response["effects"].items():
                 for code, parameter in fields["schema"]["properties"].items():
-                    if parameter.get("type") == "color":
-                        self.color_properties.add(code)
+                    if parameter.get("type") != "color":
+                        continue
+
+                    self.color_properties.add(code)
+
+                    # 42 of 63 effects expose a "gradient" key; the rest of the
+                    # color keys appear in a handful of effects each and get no
+                    # entity of their own.
+                    if code == ATTR_SELECT_GRADIENT:
+                        self.gradient_effects.add(effect)
 
         if (
             "audio" in response
@@ -431,6 +452,12 @@ class LedFxUpdater(DataUpdateCoordinator):
                     device["effect"].get("config", {}),
                 )
 
+                # The light's color needs the raw hex; _convert_effect_config
+                # rewrites it to a color name in place.
+                background: str | None = device["effect"]["config"].get(
+                    "background_color"
+                )
+
                 data |= {
                     f"{code}_{ATTR_LIGHT_BRIGHTNESS}": convert_brightness(
                         float(device["effect"]["config"]["brightness"]), True
@@ -440,6 +467,7 @@ class LedFxUpdater(DataUpdateCoordinator):
                     f"{code}_{ATTR_LIGHT_EFFECT_CONFIG}": self._convert_effect_config(
                         device["effect"]["config"]
                     ),
+                    f"{code}_{ATTR_LIGHT_COLOR}": background,
                 }
             else:
                 data |= {
@@ -449,15 +477,8 @@ class LedFxUpdater(DataUpdateCoordinator):
                     ],
                     f"{code}_{ATTR_LIGHT_PRESET}": None,
                     f"{code}_{ATTR_LIGHT_EFFECT_CONFIG}": {},
+                    f"{code}_{ATTR_LIGHT_COLOR}": None,
                 }
-
-            data |= {
-                f"{code}_{ATTR_LIGHT_COLOR}": device["effect"]["config"].get(
-                    "background_color"
-                )
-                if data[f"{code}_{ATTR_LIGHT_STATE}"]
-                else None
-            }
 
             data[f"{code}_{ATTR_LIGHT_CONFIG}"] = {
                 config: value
@@ -504,13 +525,8 @@ class LedFxUpdater(DataUpdateCoordinator):
         """
 
         for code, value in config.items():
-            if code in self.color_properties:
-                colors = self.colors if value in self.colors else self.gradients
-                for name, color in colors.items():
-                    if color == value:
-                        config[code] = name
-
-                        break
+            if code in self.color_properties and value in self.color_names:
+                config[code] = self.color_names[value]
 
         return config
 

@@ -30,7 +30,12 @@ UPDATE_LISTENER: Final = "update_listener"
 STOP_LISTENER: Final = "stop_listener"
 SIGNAL_NEW_BUTTON: Final = f"{DOMAIN}-new-button"
 SIGNAL_NEW_DEVICE: Final = f"{DOMAIN}-new-device"
+SIGNAL_NEW_SELECT: Final = f"{DOMAIN}-new-select"
 SIGNAL_NEW_SENSOR: Final = f"{DOMAIN}-new-sensor"
+# Bumped when a release needs to purge registry rows it no longer creates.
+OPTION_CLEANUP_VERSION: Final = "cleanup_version"
+CLEANUP_VERSION: Final = 1
+
 OPTION_IS_FROM_FLOW: Final = "is_from_flow"
 
 """Custom conf"""
@@ -54,6 +59,8 @@ ATTR_DEVICE_SW_VERSION: Final = "device_sw_version"
 
 """Select attributes"""
 ATTR_SELECT_AUDIO_INPUT: Final = "audio_input"
+ATTR_SELECT_GRADIENT: Final = "gradient"
+ATTR_SELECT_GRADIENT_NAME: Final = "Color pattern"
 ATTR_SELECT_AUDIO_INPUT_NAME: Final = "Audio input"
 ATTR_SELECT_AUDIO_INPUT_OPTIONS: Final = "audio_input_options"
 

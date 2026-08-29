@@ -162,8 +162,12 @@ class H(BaseHTTPRequestHandler):
             })
 
         if p == "/api/colors" and method == "GET":
-            return self._send(200, {"colors": {"builtin": {"red": "#ff0000"}, "user": {}},
-                                    "gradients": {"builtin": {"rainbow": "linear-gradient(90deg,red,blue)"}, "user": {}}})
+            return self._send(200, {
+                "colors": {"builtin": {"red": "#ff0000", "blue": "#0000ff"}, "user": {}},
+                "gradients": {"builtin": {
+                    "Rainbow": "linear-gradient(90deg, #ff0000 0%, #00ff00 50%, #0000ff 100%)",
+                    "Ocean": "linear-gradient(90deg, #00ffff 0%, #0000ff 100%)",
+                }, "user": {}}})
 
         if p == "/api/audio/devices" and method == "GET":
             return self._send(200, {"devices": {"0": "Built-in Mic", "1": "Loopback"},

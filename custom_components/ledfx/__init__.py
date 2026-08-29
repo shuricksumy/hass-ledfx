@@ -19,9 +19,11 @@ from homeassistant.helpers import entity_registry as er
 
 from .const import (
     ATTR_SELECT_AUDIO_INPUT,
+    CLEANUP_VERSION,
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_TIMEOUT,
     DOMAIN,
+    OPTION_CLEANUP_VERSION,
     OPTION_IS_FROM_FLOW,
     PLATFORMS,
     STOP_LISTENER,
@@ -59,7 +61,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         get_config_value(entry, CONF_TIMEOUT, DEFAULT_TIMEOUT),
     )
 
-    _async_remove_stale_entities(hass, entry)
+    # One-shot, so it can never remove entities a later release reintroduces.
+    if get_config_value(entry, OPTION_CLEANUP_VERSION, 0) < CLEANUP_VERSION:
+        _async_remove_stale_entities(hass, entry)
+
+        hass.config_entries.async_update_entry(
+            entry,
+            options=dict(entry.options) | {OPTION_CLEANUP_VERSION: CLEANUP_VERSION},
+        )
 
     hass.data.setdefault(DOMAIN, {})
 
@@ -101,6 +110,9 @@ def _async_remove_stale_entities(hass: HomeAssistant, entry: ConfigEntry) -> Non
     on every virtual - thousands of rows per instance, disabled by default and
     never used. They are gone now, so clear them out instead of leaving the
     registry full of entities marked "no longer being provided".
+
+    The color pattern select is created fresh afterwards, so the old disabled
+    one is removed here rather than being adopted and left switched off.
 
     :param hass: HomeAssistant: Home Assistant object
     :param entry: ConfigEntry: Config Entry object

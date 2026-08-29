@@ -15,14 +15,23 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
+
 from .const import (
+    ATTR_LIGHT_EFFECT,
+    ATTR_LIGHT_EFFECT_CONFIG,
+    ATTR_LIGHT_STATE,
     ATTR_SELECT_AUDIO_INPUT,
     ATTR_SELECT_AUDIO_INPUT_NAME,
     ATTR_SELECT_AUDIO_INPUT_OPTIONS,
+    ATTR_SELECT_GRADIENT,
+    ATTR_SELECT_GRADIENT_NAME,
     ATTR_STATE,
+    SIGNAL_NEW_DEVICE,
 )
 from .entity import LedFxEntity
 from .exceptions import LedFxError
+from .helper import generate_entity_id
 from .updater import LedFxEntityDescription, LedFxUpdater, async_get_updater
 
 PARALLEL_UPDATES = 0
@@ -79,6 +88,31 @@ async def async_setup_entry(
         add_select(
             LedFxEntityDescription(description=select, device_info=updater.device_info)
         )
+
+    @callback
+    def add_gradient(entity: LedFxEntityDescription) -> None:
+        """Add a color pattern select for a virtual.
+
+        :param entity: LedFxEntityDescription: Device object
+        """
+
+        async_add_entities(
+            [
+                LedFxGradientSelect(
+                    f"{config_entry.entry_id}-{entity.description.key}"
+                    f"-{ATTR_SELECT_GRADIENT}",
+                    entity,
+                    updater,
+                )
+            ]
+        )
+
+    for device in updater.devices.values():
+        add_gradient(device)
+
+    updater.new_select_callback = async_dispatcher_connect(
+        hass, SIGNAL_NEW_DEVICE, add_gradient
+    )
 
 
 class LedFxSelect(LedFxEntity, SelectEntity):
@@ -176,3 +210,115 @@ class LedFxSelect(LedFxEntity, SelectEntity):
                 self._attr_current_option = option
 
             self.async_write_ha_state()
+
+
+GRADIENT_DESCRIPTION: Final = SelectEntityDescription(
+    key=ATTR_SELECT_GRADIENT,
+    name=ATTR_SELECT_GRADIENT_NAME,
+    icon="mdi:gradient-horizontal",
+    entity_category=EntityCategory.CONFIG,
+    entity_registry_enabled_default=True,
+)
+
+
+class LedFxGradientSelect(LedFxEntity, SelectEntity):
+    """Color pattern of a virtual's active effect.
+
+    Most effects colour themselves from a "gradient" -- a LedFx gradient or a
+    solid colour. It is one config key rather than a whole effect schema, so it
+    gets one entity per virtual instead of one per setting.
+    """
+
+    def __init__(
+        self,
+        unique_id: str,
+        entity: LedFxEntityDescription,
+        updater: LedFxUpdater,
+    ) -> None:
+        """Initialize select.
+
+        :param unique_id: str: Unique ID
+        :param entity: LedFxEntityDescription: Device object
+        :param updater: LedFxUpdater: LedFx updater object
+        """
+
+        LedFxEntity.__init__(
+            self, unique_id, GRADIENT_DESCRIPTION, updater, ENTITY_ID_FORMAT
+        )
+
+        self._attr_device_code = entity.description.key
+        self._attr_device_info = entity.device_info
+
+        self.entity_id = generate_entity_id(
+            ENTITY_ID_FORMAT,
+            updater.ip,
+            f"{self._attr_device_code}_{ATTR_SELECT_GRADIENT}",
+        )
+
+        self._attr_options = self._build_options()
+        self._attr_current_option = self._current_option()
+        self._attr_available = self._is_available()
+
+    def _build_options(self) -> list:
+        """Gradients first, then solid colors. LedFx accepts either here.
+
+        :return list
+        """
+
+        return sorted(self._updater.gradients) + sorted(self._updater.colors)
+
+    def _current_option(self) -> str | None:
+        """Active gradient, already stored by name.
+
+        :return str | None
+        """
+
+        return self._updater.data.get(
+            f"{self._attr_device_code}_{ATTR_LIGHT_EFFECT_CONFIG}", {}
+        ).get(ATTR_SELECT_GRADIENT)
+
+    def _is_available(self) -> bool:
+        """Only 42 of 63 effects have a gradient, and only while switched on.
+
+        :return bool
+        """
+
+        return bool(
+            self._updater.data.get(ATTR_STATE, False)
+            and self._updater.data.get(
+                f"{self._attr_device_code}_{ATTR_LIGHT_STATE}", False
+            )
+            and self._updater.data.get(f"{self._attr_device_code}_{ATTR_LIGHT_EFFECT}")
+            in self._updater.gradient_effects
+        )
+
+    def _handle_coordinator_update(self) -> None:
+        """Update state."""
+
+        options: list = self._build_options()
+        current_option: str | None = self._current_option()
+        is_available: bool = self._is_available()
+
+        if (
+            self._attr_options == options
+            and self._attr_current_option == current_option
+            and self._attr_available == is_available
+        ):
+            return
+
+        self._attr_options = options
+        self._attr_current_option = current_option
+        self._attr_available = is_available
+
+        self.async_write_ha_state()
+
+    async def async_select_option(self, option: str) -> None:
+        """Apply a color pattern to the active effect.
+
+        :param option: str: Option
+        """
+
+        await self.async_update_effect(ATTR_SELECT_GRADIENT, option)
+
+        self._attr_current_option = option
+        self.async_write_ha_state()

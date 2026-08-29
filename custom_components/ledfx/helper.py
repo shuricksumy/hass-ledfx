@@ -197,6 +197,9 @@ def hex_to_rgbw(
 
     color = color.lstrip("#")
 
+    if len(color) < 6 or any(char not in "0123456789abcdefABCDEF" for char in color[:6]):
+        return None
+
     if color == "ffffff":
         return 0, 0, 0, 255
 

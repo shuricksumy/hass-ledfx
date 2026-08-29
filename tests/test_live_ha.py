@@ -107,7 +107,10 @@ async def test_setup_entry_against_live_ledfx(
     # registry rows per instance.
     for domain in ("number", "switch"):
         assert by_domain.get(domain, 0) == 0, f"{domain} entities should be gone"
-    assert by_domain["select"] == 1, "only the audio input select should remain"
+    # One audio input select, plus one color pattern select per virtual.
+    assert by_domain["select"] == 1 + by_domain["light"], (
+        f"expected 1 + {by_domain['light']} selects, got {by_domain['select']}"
+    )
 
     # Every device page must show entities; an empty device page is the
     # symptom of entity descriptions failing to build.
