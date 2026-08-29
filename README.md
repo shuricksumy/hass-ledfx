@@ -5,6 +5,10 @@
 Home Assistant integration for [LedFx](https://github.com/LedFx/LedFx), the
 real-time LED effect controller.
 
+> Continuation of [dmamontov/hass-ledfx](https://github.com/dmamontov/hass-ledfx),
+> which last saw a release in July 2023 and targets the LedFx 0.10.x API. This
+> version targets LedFx 2.x. See [Credits](#credits).
+
 Every LedFx **virtual** becomes a light entity with its effects and presets as
 the effect list, plus entities for the audio input, scenes and LedFx's audio
 configuration.
@@ -278,5 +282,38 @@ LEDFX_HOST=192.168.1.50 python3 -m pytest tests/test_live_ha.py -q -o asyncio_mo
 
 ## Credits
 
-Originally written by [@dmamontov](https://github.com/dmamontov); this fork
-updates it for the LedFx 2.x API and current Home Assistant.
+Originally written by **[Dmitry Mamontov](https://github.com/dmamontov)** and
+published as **[dmamontov/hass-ledfx](https://github.com/dmamontov/hass-ledfx)**.
+The config flow, coordinator and entity structure are all his work, and this
+repository would not exist without it.
+
+Licensed under the Apache License 2.0, as the original is. See
+[LICENSE](LICENSE).
+
+### Changes from the original
+
+The upstream project targets LedFx `>= 0.10.7` and was last released in July
+2023. Against LedFx 2.x it fails to control anything, and on current Home
+Assistant it fails to load. This version:
+
+* **Rewrote the REST client for the LedFx 2.x API.** Effects and presets moved
+  onto virtuals and were dropped from devices; `POST /virtuals/{id}/effects`
+  no longer accepts `{"config": {"active": true}}`; preset categories were
+  renamed to `ledfx_presets` / `user_presets`; the audio device endpoint reads
+  a different key. Support for LedFx 0.10.x was removed.
+* **Fixed loading on modern Home Assistant.** `DeviceEntryType` moved out of
+  `homeassistant.helpers.entity`, the deprecated `SUPPORT_*` light constants
+  were replaced with colour modes, and platforms are now forwarded inside
+  `async_setup_entry` rather than from a deferred task, which had left config
+  entries stuck in `failed_unload`.
+* **Fixed entity actions on Python 3.11+.** Handler names were built by
+  interpolating a `str`-mixin enum, which changed rendering in 3.11 and broke
+  turn on/off, button press, number set and select in seven places.
+* **Replaced the per-effect entities.** Every effect setting used to become a
+  number, switch or select on every virtual — 4832 disabled entities on a
+  20-virtual instance. Removed in favour of one colour pattern select per
+  virtual, and preset selection that stays selected.
+* **Replaced the test suite** with request-shape, config-flow, service-call
+  and live-instance tests, plus a standalone API checker and a LedFx 2.x mock.
+
+Full detail is in the commit history.
