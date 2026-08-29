@@ -288,7 +288,7 @@ class LedFxLight(LedFxEntity, LightEntity):
         :param kwargs: Any: Any arguments
         """
 
-        await self._async_call(f"_{self._type}_{STATE_ON}", STATE_ON, **kwargs)
+        await self._async_call(f"_{self._type.value}_{STATE_ON}", STATE_ON, **kwargs)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off action
@@ -296,7 +296,7 @@ class LedFxLight(LedFxEntity, LightEntity):
         :param kwargs: Any: Any arguments
         """
 
-        await self._async_call(f"_{self._type}_{STATE_OFF}", STATE_OFF, **kwargs)
+        await self._async_call(f"_{self._type.value}_{STATE_OFF}", STATE_OFF, **kwargs)
 
     async def _async_call(self, method: str, state: str, **kwargs: Any) -> None:
         """Async turn action

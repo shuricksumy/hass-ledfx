@@ -170,7 +170,7 @@ class LedFxSwitch(LedFxEntity, SwitchEntity):
         :param **kwargs: Any
         """
 
-        if action := getattr(self, f"_{ActionType.DEVICE}_toggle"):
+        if action := getattr(self, f"_{ActionType.DEVICE.value}_toggle"):
             await action(True)
 
             self._attr_is_on = True
@@ -183,7 +183,7 @@ class LedFxSwitch(LedFxEntity, SwitchEntity):
         :param **kwargs: Any
         """
 
-        if action := getattr(self, f"_{ActionType.DEVICE}_toggle"):
+        if action := getattr(self, f"_{ActionType.DEVICE.value}_toggle"):
             await action(False)
 
             self._attr_is_on = False

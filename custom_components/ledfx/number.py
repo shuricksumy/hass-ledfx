@@ -165,7 +165,7 @@ class LedFxNumber(LedFxEntity, NumberEntity):
         :param  value: float: Value
         """
 
-        if action := getattr(self, f"_{ActionType.DEVICE}_set_native_value"):
+        if action := getattr(self, f"_{ActionType.DEVICE.value}_set_native_value"):
             await action(value)
 
             self._attr_native_value = value

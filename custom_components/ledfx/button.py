@@ -105,5 +105,5 @@ class LedFxButton(LedFxEntity, ButtonEntity):
     async def async_press(self) -> None:
         """Async press action."""
 
-        if action := getattr(self, f"_{self._type}_press"):
+        if action := getattr(self, f"_{self._type.value}_press"):
             await action()
