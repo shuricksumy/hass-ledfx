@@ -24,7 +24,7 @@ from homeassistant.const import (
     CONF_TIMEOUT,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ledfx.const import (
@@ -113,6 +113,22 @@ async def test_setup_entry_against_live_ledfx(
 
     for domain in ("light", "sensor", "binary_sensor", "select", "number", "switch"):
         assert by_domain.get(domain, 0) > 0, f"no {domain} entities registered"
+
+    # Every device page must show entities; an empty device page is the
+    # symptom of entity descriptions failing to build.
+    device_reg = dr.async_get(hass)
+    devices = [
+        d
+        for d in device_reg.devices.values()
+        if entry.entry_id in d.config_entries
+    ]
+    per_device = {
+        d.name: sum(1 for e in entities if e.device_id == d.id) for d in devices
+    }
+    empty = [name for name, count in per_device.items() if count == 0]
+    print(f"devices:           {len(devices)}, empty: {empty}")
+    print(f"sample device url: {devices[0].configuration_url}")
+    assert not empty, f"devices with no entities: {empty}"
 
     lights = [e for e in entities if e.domain == "light"]
     state = hass.states.get(lights[0].entity_id)

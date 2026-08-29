@@ -640,7 +640,9 @@ class LedFxUpdater(DataUpdateCoordinator):
                 },
                 name=device_config.get("name", code),
                 model=device_config.get("type"),
-                configuration_url=f"http://{self.address}/devices/{code}",
+                # LedFx 2.x frontend is a hash-routed SPA:
+                # http://<host>:<port>/#/device/<virtual_id>
+                configuration_url=f"http://{self.address}/#/device/{code}",
             )
 
             self._prepare_device_fields(code, device_info)
