@@ -194,16 +194,87 @@ styles:
     - margin-top: 2px
 ```
 
-### Effect and colour pattern side by side
+### Brightness and colour pattern
+
+Tile cards expose both inline, with no custom cards and no more-info dialog.
+`light-brightness` gives a slider, `select-options` a dropdown of every
+gradient and colour LedFx offers.
 
 ```yaml
-type: entities
-title: Matrix
-entities:
-  - entity: light.ledfx_192_168_1_50_matrix
-  - entity: select.ledfx_192_168_1_50_matrix_color_pattern
+type: vertical-stack
+cards:
+  - type: tile
+    entity: light.ledfx_192_168_1_50_matrix
+    name: Matrix
+    features_position: bottom
+    features:
+      - type: light-brightness
+  - type: tile
+    entity: select.ledfx_192_168_1_50_matrix_color_pattern
     name: Colour pattern
+    features_position: bottom
+    features:
+      - type: select-options
 ```
+
+The colour pattern select is unavailable while the light is off, or when the
+active effect has no gradient.
+
+### One card with everything
+
+The stock light card gives a brightness dial, an RGBW colour picker and the
+full effect and preset list in one place.
+
+```yaml
+type: vertical-stack
+cards:
+  - type: light
+    entity: light.ledfx_192_168_1_50_matrix
+    name: Matrix
+  - type: tile
+    entity: select.ledfx_192_168_1_50_matrix_color_pattern
+    name: Colour pattern
+    features:
+      - type: select-options
+```
+
+### Effect, brightness and colour pattern in one tap
+
+Effect and brightness go in a single `light.turn_on`; the colour pattern is a
+separate entity, so this needs a script rather than a button's `tap_action`.
+
+```yaml
+script:
+  ledfx_matrix_party:
+    alias: Matrix party
+    sequence:
+      - action: light.turn_on
+        target:
+          entity_id: light.ledfx_192_168_1_50_matrix
+        data:
+          effect: equalizer2d - cold
+          brightness_pct: 80
+      - action: select.select_option
+        target:
+          entity_id: select.ledfx_192_168_1_50_matrix_color_pattern
+        data:
+          option: Ocean
+```
+
+```yaml
+type: button
+name: Party
+icon: mdi:party-popper
+tap_action:
+  action: perform-action
+  perform_action: script.ledfx_matrix_party
+```
+
+Setting a preset and a brightness together applies both, but the light then
+reports the bare effect (`equalizer2d`) rather than `equalizer2d - cold`: the
+brightness has moved the config away from the preset, so it is no longer that
+preset. LedFx decides this the same way. Drop `brightness_pct` if you want the
+preset name to stick.
 
 ### Automation: sunset scene
 
@@ -225,6 +296,19 @@ automation:
           entity_id: select.ledfx_192_168_1_50_matrix_color_pattern
         data:
           option: Ocean
+```
+
+### Setting brightness on its own
+
+`brightness_pct` takes 0-100, `brightness` takes 0-255. Either turns the light
+on if it is off, keeping whatever effect it had.
+
+```yaml
+- action: light.turn_on
+  target:
+    entity_id: light.ledfx_192_168_1_50_matrix
+  data:
+    brightness_pct: 40
 ```
 
 ### Selecting the audio input
