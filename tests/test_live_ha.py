@@ -17,6 +17,7 @@ import os
 
 import pytest
 import pytest_socket
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import (
     CONF_IP_ADDRESS,
     CONF_PORT,
@@ -135,3 +136,58 @@ async def test_setup_entry_against_live_ledfx(
     assert state is not None and state.state in ("on", "off")
     assert state.attributes.get("effect_list"), "light has no effect list"
     print(f"sample light:      {lights[0].entity_id} -> {state.state}")
+
+
+async def test_reload_and_unload_cycle(
+    hass: HomeAssistant,
+    enable_custom_integrations,  # noqa: ANN001
+    allow_ledfx_host,  # noqa: ANN001
+) -> None:
+    """Reload and unload must work on an entry that is not fresh from the flow.
+
+    Regression guard: async_setup_entry used to defer
+    async_forward_entry_setups to a call_later task for entries without
+    OPTION_IS_FROM_FLOW -- i.e. every entry after the first Home Assistant
+    restart. Setup returned True before any platform existed, so the next
+    reload's async_unload_platforms failed and the entry got stuck in
+    "failed_unload" with no entities at all.
+    """
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            CONF_IP_ADDRESS: HOST,
+            CONF_PORT: PORT,
+            CONF_BASIC_AUTH: False,
+            CONF_TIMEOUT: 15,
+            CONF_SCAN_INTERVAL: DEFAULT_SCAN_INTERVAL,
+        },
+        options={},  # not from the config flow: the post-restart path
+    )
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert entry.state is ConfigEntryState.LOADED
+
+    registry = er.async_get(hass)
+
+    def count() -> int:
+        return sum(
+            1 for e in registry.entities.values() if e.config_entry_id == entry.entry_id
+        )
+
+    first = count()
+    print(f"\nentities after cold setup:  {first}")
+    assert first > 0, "no entities created on the post-restart path"
+
+    await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    print(f"entry state after reload:  {entry.state}")
+    assert entry.state is ConfigEntryState.LOADED, f"reload left entry {entry.state}"
+    assert count() == first, "entity count changed across reload"
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    print(f"entry state after unload:  {entry.state}")
+    assert entry.state is ConfigEntryState.NOT_LOADED

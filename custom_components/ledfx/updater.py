@@ -171,6 +171,15 @@ class LedFxUpdater(DataUpdateCoordinator):
             if _callback is not None:
                 _callback()  # pylint: disable=not-callable
 
+        # Clear them so a later EVENT_HOMEASSISTANT_STOP does not disconnect
+        # the same dispatchers twice.
+        self.new_button_callback = None
+        self.new_device_callback = None
+        self.new_number_callback = None
+        self.new_select_callback = None
+        self.new_sensor_callback = None
+        self.new_switch_callback = None
+
     @cached_property
     def _update_interval(self) -> timedelta:
         """Update interval

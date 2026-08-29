@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 
 from homeassistant.config_entries import ConfigEntry
@@ -18,13 +17,12 @@ from homeassistant.const import (
 from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant
 
 from .const import (
-    DEFAULT_CALL_DELAY,
     DEFAULT_SCAN_INTERVAL,
-    DEFAULT_SLEEP,
     DEFAULT_TIMEOUT,
     DOMAIN,
     OPTION_IS_FROM_FLOW,
     PLATFORMS,
+    STOP_LISTENER,
     UPDATE_LISTENER,
     UPDATER,
 )
@@ -67,34 +65,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         async_update_options
     )
 
-    async def async_start(with_sleep: bool = False) -> None:
-        """Async start.
+    # Populate the coordinator before the platforms are forwarded: every
+    # entity is built from updater.devices / numbers / switches / selects.
+    #
+    # This must stay inside async_setup_entry. Deferring the forward to a
+    # call_later task returns True before the platforms exist, and Home
+    # Assistant then has an entry it believes is loaded but whose platforms
+    # were never set up - async_unload_platforms fails on the next reload and
+    # the entry gets stuck in "failed_unload" with no entities.
+    await _updater.async_config_entry_first_refresh()
 
-        :param with_sleep: bool
-        """
-
-        await _updater.async_config_entry_first_refresh()
-
-        if with_sleep:
-            await asyncio.sleep(DEFAULT_SLEEP)
-
-        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-
-    if is_new:
-        await async_start()
-        await asyncio.sleep(DEFAULT_SLEEP)
-    else:
-        hass.loop.call_later(
-            DEFAULT_CALL_DELAY,
-            lambda: hass.async_create_task(async_start(True)),
-        )
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     async def async_stop(event: Event) -> None:
         """Async stop"""
 
         await _updater.async_stop()
 
-    hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, async_stop)
+    hass.data[DOMAIN][entry.entry_id][STOP_LISTENER] = hass.bus.async_listen_once(
+        EVENT_HOMEASSISTANT_STOP, async_stop
+    )
 
     return True
 
@@ -120,14 +110,20 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     :return bool: Is success
     """
 
+    _data: dict | None = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+
+    if _data is None:
+        return True
+
     if is_unload := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
-        _updater: LedFxUpdater = hass.data[DOMAIN][entry.entry_id][UPDATER]
+        _updater: LedFxUpdater = _data[UPDATER]
         await _updater.async_stop()
 
-        _update_listener: CALLBACK_TYPE = hass.data[DOMAIN][entry.entry_id][
-            UPDATE_LISTENER
-        ]
-        _update_listener()
+        for key in (UPDATE_LISTENER, STOP_LISTENER):
+            _listener: CALLBACK_TYPE | None = _data.get(key)
+
+            if _listener is not None:
+                _listener()
 
         hass.data[DOMAIN].pop(entry.entry_id)
 
