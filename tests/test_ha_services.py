@@ -40,6 +40,7 @@ from custom_components.ledfx.const import (
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     OPTION_IS_FROM_FLOW,
+    UPDATER,
 )
 
 MOCK_PATH = Path(__file__).resolve().parent.parent / "scripts" / "mock_ledfx.py"
@@ -156,3 +157,81 @@ async def test_light_turn_on_with_effect(
     state = hass.states.get(entity_id)
     assert state.state == STATE_ON
     assert state.attributes.get("effect") == effect
+
+
+async def test_preset_selection_sticks(
+    hass: HomeAssistant, setup_entry  # noqa: ANN001
+) -> None:
+    """Picking "<effect> - <preset>" must stay selected, not snap back.
+
+    Regression guard: the preset was applied to LedFx correctly, but the light
+    reported only the bare effect type, so the dropdown fell back to the plain
+    effect and the choice looked like it had not taken.
+    """
+
+    entity_id = await _light_entity_id(hass)
+    effects = hass.states.get(entity_id).attributes["effect_list"]
+
+    for option in ("rainbow - slow-roll", "rainbow - my", "rainbow"):
+        assert option in effects, f"{option} missing from effect_list"
+
+        await hass.services.async_call(
+            LIGHT_DOMAIN,
+            SERVICE_TURN_ON,
+            {ATTR_ENTITY_ID: entity_id, "effect": option},
+            blocking=True,
+        )
+        await hass.async_block_till_done()
+
+        assert hass.states.get(entity_id).attributes["effect"] == option
+
+
+async def test_preset_survives_coordinator_refresh(
+    hass: HomeAssistant, setup_entry  # noqa: ANN001
+) -> None:
+    """The active preset is inferred from the effect config on every refresh.
+
+    LedFx does not report which preset is active, so losing it on refresh would
+    make the selection revert a few seconds after the user picked it.
+    """
+
+    entity_id = await _light_entity_id(hass)
+    updater = hass.data[DOMAIN][setup_entry.entry_id][UPDATER]
+
+    await hass.services.async_call(
+        LIGHT_DOMAIN,
+        SERVICE_TURN_ON,
+        {ATTR_ENTITY_ID: entity_id, "effect": "rainbow - slow-roll"},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+
+    await updater.async_refresh()
+    await hass.async_block_till_done()
+
+    assert hass.states.get(entity_id).attributes["effect"] == "rainbow - slow-roll"
+
+
+async def test_plain_effect_reports_no_preset(
+    hass: HomeAssistant, setup_entry  # noqa: ANN001
+) -> None:
+    """A bare effect must not be reported with a stale preset suffix."""
+
+    entity_id = await _light_entity_id(hass)
+    updater = hass.data[DOMAIN][setup_entry.entry_id][UPDATER]
+
+    await hass.services.async_call(
+        LIGHT_DOMAIN,
+        SERVICE_TURN_ON,
+        {ATTR_ENTITY_ID: entity_id, "effect": "rainbow - blazing"},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    assert hass.states.get(entity_id).attributes["effect"] == "rainbow - blazing"
+
+    # Changing a config value away from the preset drops the preset label.
+    await updater.client.effect("my-strip", "rainbow", {"brightness": 0.11})
+    await updater.async_refresh()
+    await hass.async_block_till_done()
+
+    assert hass.states.get(entity_id).attributes["effect"] == "rainbow"

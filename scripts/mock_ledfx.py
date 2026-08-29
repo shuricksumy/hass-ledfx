@@ -25,13 +25,24 @@ STATE = {
     "audio_device": 0,
 }
 
-LEDFX_PRESETS = {"rainbow": {"slow-roll": {"name": "Slow Roll", "config": {"brightness": 0.6, "speed": 0.3}}}}
-
-
 def eff_defaults(t):
     return {"blur": 0.0, "flip": False, "mirror": False, "brightness": 1.0,
             "background_color": "#000000", "background_brightness": 1.0,
             "diag": False, "speed": 1.0}
+
+
+def _preset(**overrides):
+    """LedFx stores presets as complete effect configs, not partial overrides."""
+    return {**eff_defaults(None), **overrides}
+
+
+LEDFX_PRESETS = {
+    "rainbow": {
+        "slow-roll": {"name": "Slow Roll", "config": _preset(brightness=0.6, speed=0.3)},
+        "blazing": {"name": "Blazing", "config": _preset(brightness=1.0, speed=4.0)},
+    }
+}
+USER_PRESETS = {"rainbow": {"my": {"name": "My", "config": _preset(brightness=0.42, blur=2.0)}}}
 
 
 class H(BaseHTTPRequestHandler):
@@ -97,7 +108,7 @@ class H(BaseHTTPRequestHandler):
                 "audio": {"audio_device": STATE["audio_device"], "audio_device_name": "Mic",
                           "min_volume": 0.2, "sample_rate": 60, "mic_rate": 44100,
                           "fft_size": 4096, "delay_ms": 0},
-                "ledfx_presets": LEDFX_PRESETS, "user_presets": {},
+                "ledfx_presets": LEDFX_PRESETS, "user_presets": USER_PRESETS,
                 "global_brightness": 1.0, "wled_preferences": {}, "melbanks": {},
             })
 
@@ -236,7 +247,7 @@ class H(BaseHTTPRequestHandler):
                 return self._bad(f'Required attributes {", ".join(missing)} were not provided')
             if cat not in ("ledfx_presets", "user_presets"):
                 return self._bad(f'Category {cat} is not "ledfx_presets" or "user_presets"')
-            table = LEDFX_PRESETS if cat == "ledfx_presets" else {}
+            table = LEDFX_PRESETS if cat == "ledfx_presets" else USER_PRESETS
             if eid not in table:
                 return self._bad(f"Effect {eid} does not exist in category {cat}")
             if pid not in table[eid]:

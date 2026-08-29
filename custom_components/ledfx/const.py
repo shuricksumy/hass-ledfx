@@ -73,9 +73,14 @@ ATTR_LIGHT_COLOR: Final = "color"
 ATTR_LIGHT_CONFIG: Final = "config"
 ATTR_LIGHT_EFFECT: Final = "effect"
 ATTR_LIGHT_EFFECT_CONFIG: Final = "effect_config"
+ATTR_LIGHT_PRESET: Final = "preset"
 ATTR_LIGHT_EFFECTS: Final = "effects"
 ATTR_LIGHT_DEFAULT_PRESETS: Final = "default_presets"
 ATTR_LIGHT_CUSTOM_PRESETS: Final = "custom_presets"
+
+# LedFx ignores these when deciding whether an effect config matches a preset
+# (ledfx.config.UI_ONLY_KEYS_IGNORED_FOR_CONFIG_COMPARISON).
+PRESET_COMPARE_IGNORED_KEYS: Final = ("advanced", "diag", "gradient_name")
 
 """Icons"""
 SENSOR_ICONS: Final = {

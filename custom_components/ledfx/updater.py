@@ -41,6 +41,7 @@ from .const import (
     ATTR_LIGHT_EFFECT,
     ATTR_LIGHT_EFFECT_CONFIG,
     ATTR_LIGHT_EFFECTS,
+    ATTR_LIGHT_PRESET,
     ATTR_LIGHT_STATE,
     ATTR_SELECT_AUDIO_INPUT,
     ATTR_SELECT_AUDIO_INPUT_OPTIONS,
@@ -50,6 +51,7 @@ from .const import (
     DOMAIN,
     MAINTAINER,
     NAME,
+    PRESET_COMPARE_IGNORED_KEYS,
     SIGNAL_NEW_BUTTON,
     SIGNAL_NEW_DEVICE,
     SIGNAL_NEW_NUMBER,
@@ -150,6 +152,7 @@ class LedFxUpdater(DataUpdateCoordinator):
         self.switches: dict[str, LedFxEntityDescription] = {}
 
         self.effect_properties: dict = {}
+        self.presets: dict = {}
         self.colors: dict = {}
         self.gradients: dict = {}
 
@@ -549,12 +552,14 @@ class LedFxUpdater(DataUpdateCoordinator):
                 effect: sorted(list(presets.keys()))
                 for effect, presets in response["ledfx_presets"].items()
             }
+            self.presets[ATTR_LIGHT_DEFAULT_PRESETS] = response["ledfx_presets"]
 
         if "user_presets" in response and response["user_presets"]:
             data[ATTR_LIGHT_CUSTOM_PRESETS] = {
                 effect: sorted(list(presets.keys()))
                 for effect, presets in response["user_presets"].items()
             }
+            self.presets[ATTR_LIGHT_CUSTOM_PRESETS] = response["user_presets"]
 
     async def _async_prepare_devices(self, data: dict) -> None:
         """Prepare devices.
@@ -609,11 +614,21 @@ class LedFxUpdater(DataUpdateCoordinator):
             )
 
             if data[f"{code}_{ATTR_LIGHT_STATE}"]:
+                # LedFx does not say which preset is active, so infer it by
+                # comparing configs. Must happen before _convert_effect_config,
+                # which rewrites colors to names in place.
+                preset, _ = find_matching_preset(
+                    self.presets,
+                    device["effect"].get("type", ""),
+                    device["effect"].get("config", {}),
+                )
+
                 data |= {
                     f"{code}_{ATTR_LIGHT_BRIGHTNESS}": convert_brightness(
                         float(device["effect"]["config"]["brightness"]), True
                     ),
                     f"{code}_{ATTR_LIGHT_EFFECT}": device["effect"].get("type"),
+                    f"{code}_{ATTR_LIGHT_PRESET}": preset,
                     f"{code}_{ATTR_LIGHT_EFFECT_CONFIG}": self._convert_effect_config(
                         device["effect"]["config"]
                     ),
@@ -624,6 +639,7 @@ class LedFxUpdater(DataUpdateCoordinator):
                     f"{code}_{ATTR_LIGHT_EFFECT}": data.get(ATTR_LIGHT_EFFECTS, ["-"])[
                         0
                     ],
+                    f"{code}_{ATTR_LIGHT_PRESET}": None,
                     f"{code}_{ATTR_LIGHT_EFFECT_CONFIG}": {},
                 }
 
@@ -827,6 +843,44 @@ class LedFxEntityDescription:
     device_code: str | None = None
     type: ActionType = ActionType.DEFAULT
     extra: dict | None = None
+
+
+def find_matching_preset(
+    presets: dict, effect: str, config: dict
+) -> tuple[str | None, str | None]:
+    """Find the preset whose config matches an effect's active config.
+
+    Mirrors ledfx.config.find_matching_preset: LedFx does not report which
+    preset is active, so it is inferred by comparing configs, ignoring the
+    UI-only keys LedFx itself ignores.
+
+    :param presets: dict: {category: {effect: {preset_id: {"config": {...}}}}}
+    :param effect: str: Active effect type
+    :param config: dict: Active effect config
+    :return tuple[str | None, str | None]: (preset_id, category)
+    """
+
+    if not isinstance(config, dict):
+        return None, None
+
+    target: dict = {
+        code: value
+        for code, value in config.items()
+        if code not in PRESET_COMPARE_IGNORED_KEYS
+    }
+
+    for category in (ATTR_LIGHT_DEFAULT_PRESETS, ATTR_LIGHT_CUSTOM_PRESETS):
+        for preset, data in presets.get(category, {}).get(effect, {}).items():
+            candidate: dict = {
+                code: value
+                for code, value in data.get("config", {}).items()
+                if code not in PRESET_COMPARE_IGNORED_KEYS
+            }
+
+            if candidate == target:
+                return preset, category
+
+    return None, None
 
 
 def convert_brightness(brightness: float, is_reverse: bool = False) -> float:

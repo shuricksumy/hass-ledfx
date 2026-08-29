@@ -30,6 +30,7 @@ from .const import (
     ATTR_LIGHT_EFFECT,
     ATTR_LIGHT_EFFECT_CONFIG,
     ATTR_LIGHT_EFFECTS,
+    ATTR_LIGHT_PRESET,
     ATTR_LIGHT_STATE,
     ATTR_STATE,
     SIGNAL_NEW_DEVICE,
@@ -144,12 +145,31 @@ class LedFxLight(LedFxEntity, LightEntity):
             updater.data.get(ATTR_LIGHT_DEFAULT_PRESETS, {}),
             updater.data.get(ATTR_LIGHT_CUSTOM_PRESETS, {}),
         )
-        self._attr_effect = updater.data.get(
-            f"{self._attr_device_code}_{ATTR_LIGHT_EFFECT}"
+        self._attr_effect = self._effect_name(
+            updater.data.get(f"{self._attr_device_code}_{ATTR_LIGHT_EFFECT}"),
+            updater.data.get(f"{self._attr_device_code}_{ATTR_LIGHT_PRESET}"),
         )
         self._attr_extra_state_attributes = updater.data.get(
             f"{self._attr_device_code}_{ATTR_LIGHT_EFFECT_CONFIG}", {}
         ) | updater.data.get(f"{self._attr_device_code}_{ATTR_LIGHT_CONFIG}", {})
+
+    @staticmethod
+    def _effect_name(effect: str | None, preset: str | None) -> str | None:
+        """Effect name as shown in effect_list.
+
+        build_effects lists a preset as "<effect> - <preset>", so the selected
+        option only stays selected in the UI if the reported effect uses the
+        same form.
+
+        :param effect: str | None: Effect type
+        :param preset: str | None: Active preset id, if any
+        :return str | None
+        """
+
+        if effect and preset:
+            return f"{effect} - {preset}"
+
+        return effect
 
     def _handle_coordinator_update(self) -> None:
         """Update state."""
@@ -174,8 +194,9 @@ class LedFxLight(LedFxEntity, LightEntity):
             self._updater.data.get(ATTR_LIGHT_DEFAULT_PRESETS, {}),
             self._updater.data.get(ATTR_LIGHT_CUSTOM_PRESETS, {}),
         )
-        effect: str | None = self._updater.data.get(
-            f"{self._attr_device_code}_{ATTR_LIGHT_EFFECT}"
+        effect: str | None = self._effect_name(
+            self._updater.data.get(f"{self._attr_device_code}_{ATTR_LIGHT_EFFECT}"),
+            self._updater.data.get(f"{self._attr_device_code}_{ATTR_LIGHT_PRESET}"),
         )
         attributes: dict = {
             code: value
@@ -212,34 +233,39 @@ class LedFxLight(LedFxEntity, LightEntity):
         :param kwargs: Any: Any arguments
         """
 
-        preset: str | None = None
+        code: str = self._attr_device_code  # type: ignore
         old_effect: str | None = self._attr_effect
+
+        # _attr_effect holds the name shown in effect_list, which for a preset
+        # is "<effect> - <preset>". The API only ever accepts the bare effect
+        # type, so the two are tracked separately.
+        requested: str | None = kwargs.get(ATTR_EFFECT)
+        effect: str | None = self._updater.data.get(f"{code}_{ATTR_LIGHT_EFFECT}")
+        preset: str | None = self._updater.data.get(f"{code}_{ATTR_LIGHT_PRESET}")
         category: EffectCategory = EffectCategory.NONE
 
-        if ATTR_EFFECT in kwargs:
-            self._attr_effect, preset, category = find_effect(
-                kwargs[ATTR_EFFECT],
-                self._updater.data.get(ATTR_LIGHT_DEFAULT_PRESETS, []),
-                self._updater.data.get(ATTR_LIGHT_CUSTOM_PRESETS, []),
+        if requested is not None:
+            effect, preset, category = find_effect(
+                requested,
+                self._updater.data.get(ATTR_LIGHT_DEFAULT_PRESETS, {}),
+                self._updater.data.get(ATTR_LIGHT_CUSTOM_PRESETS, {}),
             )
 
-        if (
-            self._attr_effect != old_effect
-            or not self._attr_is_on
-            or preset is not None
-        ):
+        # Re-select of the same preset still re-applies it, matching the
+        # previous behaviour of resending whenever a preset was picked.
+        effect_changed: bool = requested is not None and requested != old_effect
+        preset_requested: bool = requested is not None and preset is not None
+
+        if effect_changed or preset_requested or not self._attr_is_on:
             response: dict = dict(
                 await self._updater.client.preset(
-                    self._attr_device_code,  # type: ignore
+                    code,
                     category.value,
-                    self._attr_effect,  # type: ignore
+                    effect,  # type: ignore
                     preset,  # type: ignore
                 )
                 if category != EffectCategory.NONE and preset is not None
-                else await self._updater.client.device_on(
-                    self._attr_device_code,  # type: ignore
-                    self._attr_effect,  # type: ignore
-                )
+                else await self._updater.client.device_on(code, effect)  # type: ignore
             )
 
             effect_config: dict = {}
@@ -250,16 +276,17 @@ class LedFxLight(LedFxEntity, LightEntity):
                     if not isinstance(value, dict) and not isinstance(value, list)
                 }
 
-            self._updater.data[
-                f"{self._attr_device_code}_{ATTR_LIGHT_EFFECT}"
-            ] = self._attr_effect
+            self._updater.data[f"{code}_{ATTR_LIGHT_EFFECT}"] = effect
+            self._updater.data[f"{code}_{ATTR_LIGHT_PRESET}"] = preset
 
-            self._updater.data[
-                f"{self._attr_device_code}_{ATTR_LIGHT_EFFECT_CONFIG}"
-            ] = {
-                code: value
-                for code, value in effect_config.items()
-                if code != ATTR_BRIGHTNESS
+            # Report the option the user picked rather than the bare effect
+            # type, otherwise the selection does not stick in the UI.
+            self._attr_effect = self._effect_name(effect, preset)
+
+            self._updater.data[f"{code}_{ATTR_LIGHT_EFFECT_CONFIG}"] = {
+                key: value
+                for key, value in effect_config.items()
+                if key != ATTR_BRIGHTNESS
             }
 
         if ATTR_BRIGHTNESS in kwargs:
