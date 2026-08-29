@@ -269,9 +269,9 @@ class LedFxUpdater(DataUpdateCoordinator):
         :param data: dict
         """
 
-        if self.version != Version.V1:
-            return
-
+        # Runs after _async_prepare_config, which seeds the V2 device version
+        # with configuration_version (the config schema version, e.g. 2.3.6).
+        # /api/info carries the actual LedFx release, so prefer it.
         response: dict = await self.client.info()
 
         if "version" in response:
@@ -696,7 +696,14 @@ class LedFxUpdater(DataUpdateCoordinator):
             field: LedFxEntityDescription | None = None
             signal: str | None = None
 
-            if isinstance(info[ATTR_FIELD], NumberEntityDescription):
+            # Dispatch on the field type recorded by _build_entity rather than
+            # isinstance(). Home Assistant rebuilds entity descriptions through
+            # homeassistant.util.frozen_dataclass_compat, so the instances are
+            # not of the imported *EntityDescription classes and isinstance()
+            # silently returns False for all of them.
+            field_type: str | None = info.get(ATTR_FIELD_TYPE)
+
+            if field_type == "number":
                 if f"{code}_{prop}" in self.numbers:
                     continue
 
@@ -713,7 +720,7 @@ class LedFxUpdater(DataUpdateCoordinator):
 
                 if self.new_number_callback:
                     signal = SIGNAL_NEW_NUMBER
-            elif isinstance(info[ATTR_FIELD], SwitchEntityDescription):
+            elif field_type == "switch":
                 if f"{code}_{prop}" in self.switches:
                     continue
 
@@ -730,7 +737,7 @@ class LedFxUpdater(DataUpdateCoordinator):
 
                 if self.new_switch_callback:
                     signal = SIGNAL_NEW_SWITCH
-            elif isinstance(info[ATTR_FIELD], SelectEntityDescription):
+            elif field_type in ("select", "color"):
                 if f"{code}_{prop}" in self.selects:
                     continue
 
