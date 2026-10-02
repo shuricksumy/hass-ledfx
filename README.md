@@ -16,9 +16,19 @@ configuration.
 ## Requirements
 
 * LedFx **2.x** — developed and verified against
-  [v2.1.9](https://github.com/LedFx/LedFx/releases/tag/v2.1.9)
+  [v2.1.9](https://github.com/LedFx/LedFx/releases/tag/v2.1.9); the API this
+  integration uses is unchanged in
+  [v2.2.0](https://github.com/LedFx/LedFx/releases/tag/v2.2.0)
 * Home Assistant **2026.8** or newer, on Python 3.14 (developed and verified
   against 2026.8.3)
+
+> **LedFx 2.2.0 and host names.** From 2.2.0, LedFx answers 403 to a host
+> name it does not recognise, and the integration then reports only
+> *"Failed to complete the request"*. An IP address, a bare host name or a
+> `.local` / `.lan` / `.home.arpa` name works as before. If you set the
+> integration up with any other name (`ledfx.example.com`, say), add it to
+> `allowed_hosts` in LedFx's `config.json` and restart LedFx:
+> `"allowed_hosts": ["ledfx.example.com"]`.
 
 LedFx 2.x moved effects and presets onto virtuals and dropped them from
 devices, so this release targets the `virtuals` API only. LedFx 0.10.x is no
